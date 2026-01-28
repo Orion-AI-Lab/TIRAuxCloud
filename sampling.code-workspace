@@ -1,0 +1,31 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "Python Debugger: Python File",
+				"type": "debugpy",
+				"request": "launch",
+				"program": "${file}",
+				"_args": [
+        			"-d", "~/shared_storage/DSdownloads/manual_landsat/ls8col1",
+        			"-p", ".zip",
+        			"-o", "clear_scenes_mancol1.csv"
+				],
+				"__args": [
+        			"-d", "~/shared_storage/DSdownloads/manual_landsat/ls8col1",
+        			"-p", ".zip"
+				],
+				"args": [
+					"-t", "landsatMA"
+				],
+
+			}
+		]
+	}
+}
