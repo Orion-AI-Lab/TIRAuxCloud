@@ -1,7 +1,5 @@
 # TIRAuxCloud Dataset
 
-This supplementary material package accompanies the **CVPR submission** and is intended exclusively for review purposes.
-
 ---
 
 ## 📁 Contents
@@ -14,18 +12,6 @@ Inside the hugging face repository https://huggingface.co/datasets/tirauxcloud/T
   - **VIIRS**
 
 - Saved model weights used in the experiments presented in the paper (`model_files.tar.gz`)
-
-Inside the supplementary material zip file are the code for reproducing the results of **Tables 2, 3, and 4** (running the models on the test datasets), along with the CSV files containing the corresponding model run parameters under `results` folder:
-  - `models_table2.csv`
-  - `models_table3.csv`
-  - `models_table4.csv`
-
-These files contain detailed information about the models that include:
-  - model weight filenames  
-  - metrics per class
-  - hyperparameters  
-  - input feature configurations  
-  - and other metadata extracted from Weights & Biases
 
 ---
 
