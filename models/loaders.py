@@ -28,18 +28,22 @@ def getfiles(df, patches_path=None):
         files = [os.path.expanduser(f) for f in df["file"].tolist()]
     return files
 
-#files may contain different descriptions
 def preload_band_maps(files):
-    """Pre-load band descriptions to avoid repeated file opening"""
-    band_maps = {}
-    # for i, path in enumerate(files):
-    #     with rasterio.open(path) as src:
-    #         band_descs = [src.descriptions[j] for j in range(src.count)]
-    #         band_maps[i] = {desc: j for j, desc in enumerate(band_descs)}
-    for i, path in enumerate(tqdm(files, desc="Loading band maps")):
+    """
+    Optimized band mapping using a Smart Cache dictionary.
+    Reduces disk I/O by caching metadata for unique sensor types.
+    """
+    band_maps = [] # Using a list is slightly cleaner than a dict with indices
+    sensor_cache = {} 
+    for path in tqdm(files, desc="Loading band maps"):
         with rasterio.open(path) as src:
-            band_descs = [src.descriptions[j] for j in range(src.count)]
-            band_maps[i] = {desc: j for j, desc in enumerate(band_descs)}
+            # Fingerprint: (Band Count, First Band Name)
+            fingerprint = (src.count, src.descriptions[0])   
+            if fingerprint not in sensor_cache:
+                # Map once per unique sensor type
+                sensor_cache[fingerprint] = {desc: j for j, desc in enumerate(src.descriptions)}  
+            # Append the reference to the cached dict
+            band_maps.append(sensor_cache[fingerprint])
     return band_maps
 
 def loadbands(path, band_map, input_bands_lists, target_band):
@@ -89,7 +93,7 @@ def process_mask(y, yshift=1, thincloudclass=1):
 
 class MultiBandTiffDataset(Dataset):
 
-    def __init__(self, df, band_stats, input_bands, target_band,  yshift=1, transform=None, thincloudcl=None, patches_path=None):
+    def __init__(self, df, band_stats, input_bands, target_band, yshift=1, transform=None, thincloudcl=None, patches_path=None):
         self.files = getfiles(df, patches_path)
         self.band_map = preload_band_maps(self.files)
         self.band_stats = band_stats
@@ -148,7 +152,7 @@ class MultiBandTiffDataset(Dataset):
             pass
 
         return x.float(), y.long()
-    
+        
 
 def _debug_sample(x, y, path=None):
     import numpy as _np
