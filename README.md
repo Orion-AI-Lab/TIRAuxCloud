@@ -4,6 +4,9 @@ TIRAuxCloud is a multi-modal dataset designed to support **all day cloud segment
 
 The full paper describing the dataset, methodology, and benchmarks is available on: https://arxiv.org/abs/2602.21905
 
+
+![TIRAuxCloud](imgs/scene_sampling.png)
+
 ---
 
 ## 📁 Download TIRAuxCloud
