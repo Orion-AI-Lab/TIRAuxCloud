@@ -1,12 +1,16 @@
-# TIRAuxCloud Dataset
+# [TIRAuxCloud: A Thermal Infrared Dataset for Day and Night Cloud Detection](https://arxiv.org/abs/2602.21905)
+
+TIRAuxCloud is a multi-modal dataset designed to support **all day cloud segmentation**, with a particular focus on **thermal infrared (TIR) imagery**. It combines multispectral observations from **Landsat and VIIRS** with auxiliary information such as **elevation, land cover, meteorological variables, and cloud-free reference imagery**. The dataset includes both **automatically generated cloud masks and manually annotated samples**, enabling the development and evaluation of advanced cloud detection methods.
+
+The full paper describing the dataset, methodology, and benchmarks is available on: https://arxiv.org/abs/2602.21905
 
 ---
 
-## 📁 Contents
+## 📁 Download TIRAuxCloud
 
 Inside the hugging face repository https://huggingface.co/datasets/tirauxcloud/TIRAuxCloud/tree/main the following are provided :
 
-- Sample data from the **three test splits** of the three **TIRAuxCloud subsets**:
+- Data from the **training, validation and test splits** of the three **TIRAuxCloud subsets**:
   - **Main Landsat**
   - **MA Landsat**
   - **VIIRS**
@@ -30,7 +34,6 @@ Make sure that all the parameters in the selected configuration block of the pro
 
 All the other parameters in the JSON configuration must match the corresponding values in the relevant CSV row of the selected model. All saved models are in the hugging face repository.
 
----
 
 ### 2️⃣ Run the evaluation script  
 Execute **`model_test.py`** with the `-t` parameter to select the test subset:
@@ -39,3 +42,22 @@ Execute **`model_test.py`** with the `-t` parameter to select the test subset:
 python model_test.py -t landsat
 python model_test.py -t landsatMA
 python model_test.py -t viirs
+```
+
+---
+
+## 📖 Citation
+
+if you use this work please cite:
+
+```
+@misc{apostolakis2026tirauxcloudthermalinfrareddataset,
+      title={TIRAuxCloud: A Thermal Infrared Dataset for Day and Night Cloud Detection}, 
+      author={Alexis Apostolakis and Vasileios Botsos and Niklas Wölki and Andrea Spichtinger and Nikolaos Ioannis Bountos and Ioannis Papoutsis and Panayiotis Tsanakas},
+      year={2026},
+      eprint={2602.21905},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2602.21905}, 
+}
+```
