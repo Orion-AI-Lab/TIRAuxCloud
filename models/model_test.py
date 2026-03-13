@@ -131,7 +131,6 @@ def evaluate_on_test_set(
                 preds = torch.argmax(outputs[0], dim=1).cpu()
             else:
                 preds = torch.argmax(outputs, dim=1).cpu()
-            uncertainty_scores = outputs.var(dim=0).mean(dim=1)
             targets = targets.cpu()
             all_preds.append(preds)
             all_targets.append(targets)
