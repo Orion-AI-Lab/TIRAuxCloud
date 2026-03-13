@@ -126,7 +126,7 @@ def iou_per_class(preds, labels, num_classes=3):
         ious.append(iou)
     return ious
 
-def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct_pixels):
+def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct_pixels, mean_uncertainty=None):
     """
     Calculate validation metrics from predictions and targets.
     
@@ -175,6 +175,8 @@ def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct
     metrics = {
         "pixel_accuracy": pixel_accuracy,
     }
+    if mean_uncertainty is not None:
+        metrics["mean_uncertainty"] = mean_uncertainty
     avg_iou = 0
     for cls in range(num_classes):
         metrics[f"iou_{cls}"] = iou[cls]
@@ -193,14 +195,17 @@ def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct
     # metrics["confusion_matrix"] = cm.flatten().tolist()
 
      # Print results
-    print(f"\nPixel Accuracy: {pixel_accuracy:.4f}, mIoU: {avg_iou}")
+    if mean_uncertainty is not None:
+        print(f"\nPixel Accuracy: {pixel_accuracy:.4f}, mIoU: {avg_iou:.4f}, Mean Uncertainty: {mean_uncertainty:.4f}")
+    else:
+        print(f"\nPixel Accuracy: {pixel_accuracy:.4f}, mIoU: {avg_iou:.4f}")
     print(f"{'Class':<6} {'IoU':>6} {'Precision':>10} {'Recall':>8} {'F1':>6}")
     for cls in range(num_classes):
         print(f"{cls:<6} {iou[cls]:>6.3f} {precision[cls]:>10.3f} {recall[cls]:>8.3f} {f1[cls]:>6.3f}")
    
     return metrics
 
-def validate_all(model, val_loader, params_dict):
+def validate_all(model, val_loader, params_dict, mean_uncertainty=None):
     """
     Validation function for single-head U-Net models.
     Expects data loader to return (x, y) format.
@@ -257,7 +262,7 @@ def validate_all(model, val_loader, params_dict):
         avg_loss = total_loss / total_batches
 
     # Calculate metrics
-    metrics = calculate_metrics(all_preds, all_targets, params_dict["num_classes"], total_pixels, correct_pixels)
+    metrics = calculate_metrics(all_preds, all_targets, params_dict["num_classes"], total_pixels, correct_pixels,mean_uncertainty)
     if "loss" in params_dict:
         metrics["val_loss"] = avg_loss
         metrics["neg_val_loss"] = -avg_loss

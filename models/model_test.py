@@ -17,6 +17,10 @@ import json
 import argparse
 from tqdm import tqdm
 
+def single_pass_uncertainty(logits):
+    probs = torch.softmax(logits, dim=1)
+    entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=1)
+    return entropy
 
 def save_inference_images(ibatch, save_inference_dir, results, inputs, outputs, preds, targets, batch_size, test_df, save_logits, num_classes):
     if isinstance(inputs, list):
@@ -105,6 +109,8 @@ def evaluate_on_test_set(
         print(f"Save Inference to: {save_inference_dir}")
 
     with torch.no_grad():
+        total_uncertainty = 0.0
+        total_pixels = 0
         results=[]
         for i, (inputs, targets) in enumerate(tqdm(test_loader, desc="Inference Progress")):
 
@@ -114,10 +120,17 @@ def evaluate_on_test_set(
             outputs = model(inputs)
             '''
             if isinstance(outputs, tuple):
+                logits = outputs[0]
+            else:
+                logits = outputs
+
+            uncertainty = single_pass_uncertainty(logits).cpu()
+            total_uncertainty += uncertainty.sum().item()
+            total_pixels += uncertainty.numel()
+            if isinstance(outputs, tuple):
                 preds = torch.argmax(outputs[0], dim=1).cpu()
             else:
                 preds = torch.argmax(outputs, dim=1).cpu()
-
             targets = targets.cpu()
             all_preds.append(preds)
             all_targets.append(targets)
@@ -134,7 +147,9 @@ def evaluate_on_test_set(
 
         print(f"Saved inference results to {csv_path}")               
 
-    metrics = validate_all(model, test_loader, params_dict)
+    if total_pixels > 0:
+        mean_uncertainty = total_uncertainty / total_pixels
+    metrics = validate_all(model, test_loader, params_dict,mean_uncertainty)
 
     if wandbrun:
         wandbrun.log(metrics)
