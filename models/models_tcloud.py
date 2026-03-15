@@ -28,6 +28,35 @@ def find_file_recursive(filename, search_dir):
         if filename in files:
             return os.path.join(root, filename)
 
+def get_gradcam_target_layer(model, model_type):
+    """
+    Returns target layer(s) for GradCAM++ visualization based on model architecture.
+    The target layer is typically a high-level feature extractor before classification.
+    
+    Args:
+        model: Initialized model object
+        model_type (str): Model type (e.g., 'segformer', 'unet', 'deeplabv3')
+    
+    Returns:
+        list: List containing target layer(s) for GradCAM++
+        
+    Raises:
+        ValueError: If model_type is not supported    """
+    # TODO : Implement for all model_type
+
+    model_type = model_type.lower()
+
+    if model_type in ["segformer" ]:
+        try:
+            target_layer = model.encoder.block4[-1]
+            return [target_layer]
+        except AttributeError:
+            raise ValueError(
+                f"Could not find encoder.block4 in SegFormer model. "
+                f"Check model initialization."
+            )
+    raise ValueError(f"Unsupported model type for GradCAM target layer: {model_type}")
+
 def sort_lists(obj):
     """
     Recursively sort all lists in the object.
