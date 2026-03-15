@@ -121,7 +121,7 @@ def evaluate_on_test_set(
         os.makedirs(save_inference_dir, exist_ok=True)
         print(f"Save Inference to: {save_inference_dir}")
     
-    gradcam_dir = "landsat_testset_sample/landsat_gradcam_grid_img" # change befor commit 
+    gradcam_dir = "/path/to/gradcam_dir/"
     os.makedirs(gradcam_dir, exist_ok=True)
     print(f"GradCAM visualizations will be saved to: {gradcam_dir}")
 
