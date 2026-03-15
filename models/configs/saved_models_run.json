@@ -26,12 +26,14 @@
 
             "dataset": "split_main_landsat.csv",
             "model_file": "/path/to/model_files/file",
-            "num_classes" : 3,
+            "num_classes" : 2,
             "cpuworkers": 5,
-            "features": ["cloudy_Radiance_B10_B11_mean","clear_Radiance_B10_B11_mean","acqt_surface_pressure","acqt_dewpoint_2m","acqt_skin_temp","acqt_total_precip_log","acqt_snow_cover_log","dem"],
+            "features": ["cloudy_Radiance_B10_B11_mean","clear_Radiance_B10_B11_mean","dem","acqt_surface_pressure","acqt_dewpoint_2m","acqt_skin_temp","acqt_total_precip_log","acqt_snow_cover_log"],
             "model_type": "SegFormer",
             "target_band": "cloudy_cloud_mask",
-            "thin_cloud_class": 1
+            "thin_cloud_class": 1,
+            "gradcam_batch_count" : 1 ,
+            "gradcam_target_class" : 1
         }
     },
     "landsatMA":{
