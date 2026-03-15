@@ -10,12 +10,27 @@ parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(parent_script_dir)
 import gc
-from models_tcloud import init_model_and_loaders
+from models_tcloud import init_model_and_loaders,get_gradcam_target_layer
 from libraries.utils import save_geotiff, get_preds_multi_encoders
 from libraries.wandb_retrieve import get_filtered_wandb_runs, wandinit
 import json
 import argparse
 from tqdm import tqdm
+from pytorch_grad_cam import GradCAMPlusPlus
+import matplotlib.pyplot as plt
+
+
+class SegmentationTarget:
+    """Converts segmentation output to scalar for GradCAM++ backward pass."""
+    def __init__(self, class_idx):
+        self.class_idx = class_idx
+    
+    def __call__(self, model_output):
+        # SegFormer output is 3D: (batch, height, width) after argmax
+        if model_output.dim() == 3:
+            return model_output[0].float().sum() 
+        else:
+            raise ValueError(f"Unexpected model output shape: {model_output.shape}")
 
 
 def save_inference_images(ibatch, save_inference_dir, results, inputs, outputs, preds, targets, batch_size, test_df, save_logits, num_classes):
