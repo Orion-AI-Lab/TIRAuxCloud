@@ -110,6 +110,8 @@ def evaluate_on_test_set(
 
     all_preds = []
     all_targets = []
+    results=[]
+
     if save_inference:
         model_file=os.path.basename(model_path)
         save_inference_dir=os.path.join(os.path.dirname(model_path),"inferences",os.path.splitext(model_file)[0])
@@ -118,28 +120,92 @@ def evaluate_on_test_set(
             json.dump(params_dict, f, indent=4)
         os.makedirs(save_inference_dir, exist_ok=True)
         print(f"Save Inference to: {save_inference_dir}")
+    
+    gradcam_dir = "landsat_testset_sample/landsat_gradcam_grid_img" # change befor commit 
+    os.makedirs(gradcam_dir, exist_ok=True)
+    print(f"GradCAM visualizations will be saved to: {gradcam_dir}")
 
-    with torch.no_grad():
-        results=[]
-        for i, (inputs, targets) in enumerate(tqdm(test_loader, desc="Inference Progress")):
+    target_layers = get_gradcam_target_layer(model, params_dict["model_type"])
+    gradcam_batch_count = 1 
+    gradcam_target_class = 1 
+    if params_dict["gradcam_batch_count"] : 
+        gradcam_batch_count = params_dict["gradcam_batch_count"]
+    if params_dict["gradcam_target_class"] : 
+        gradcam_target_class = params_dict["gradcam_target_class"]
+    
+    # GRAD-CAM++ : This prototype only focuses on Landsat dataset and SegFromer Model 
+    for i, (inputs, targets) in enumerate(tqdm(test_loader, desc="Inference Progress")):
 
+        if i < gradcam_batch_count:
+            batch_size_actual = inputs.shape[0]
+            print(f"Processing all {batch_size_actual} samples in first batch for GradCAM")
+            
+            for sample_idx in range(batch_size_actual):
+                try:
+                    with GradCAMPlusPlus(model=model, target_layers=target_layers) as cam:
+                        with torch.enable_grad(): # For safety TODO: Check and remove if not required 
+                            input_tensor = inputs[sample_idx:sample_idx+1].to(device).float()  
+                            input_tensor.requires_grad_(True)
+                            targets_for_cam = [SegmentationTarget(gradcam_target_class)] 
+                            activation_map = cam(input_tensor=input_tensor, targets=targets_for_cam)
+                except RuntimeError as e:
+                    print(f"GradCAM error for sample {sample_idx}: {e}")
+                    activation_map = None
+
+                if activation_map is not None:
+                    
+                    all_bands = inputs[sample_idx].cpu().numpy()
+                    # TODO : Get this data from params_dict
+                    num_display_bands = 3  # First 3 meaningful bands: cloudy_B10_B11, clear_B10_B11, dem
+                    
+                    # TODO: change this to get from loader  
+                    band_names = params_dict.get('features', [f'Band {b+1}' for b in range(num_display_bands)])
+                    
+                    print(f"Sample {sample_idx}: displaying {num_display_bands} meaningful bands + GradCAM")
+                    
+                    # Fixed 2x2 grid: [Band0, Band1] [Band2, Heatmap]
+                    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+                    axes = axes.flatten()
+                    
+                    for band_idx in range(num_display_bands):
+                        band_data = all_bands[band_idx].astype(float)
+                        band_normalized = (band_data - band_data.min()) / (band_data.max() - band_data.min() + 1e-8)
+                        axes[band_idx].imshow(band_normalized, cmap='gray')
+                        axes[band_idx].set_title(band_names[band_idx], fontsize=12, fontweight='bold')
+                        axes[band_idx].axis('off')
+                    
+                    im = axes[3].imshow(activation_map[0], cmap='jet')
+                    axes[3].set_title("GradCAM++ Heatmap (Class 1)", fontsize=12, fontweight='bold')
+                    axes[3].axis('off')
+                    fig.colorbar(im, ax=axes[3], label='Activation Strength', fraction=0.046, pad=0.04)
+                    
+                    plt.tight_layout()
+                    
+                    save_path = os.path.join(gradcam_dir, f"sample_{sample_idx:04d}_gradcam_collage.png")
+                    plt.savefig(save_path, dpi=100, bbox_inches='tight')
+                    print(f"Saved GradCAM collage to: {save_path}")
+                    plt.close()
+                else:
+                    print(f"GradCAM failed for sample {sample_idx}, no visualization")
+            print(f"\n ✓ GradCAM visualization complete for {gradcam_batch_count} batch{ "s" if gradcam_batch_count > 1 else "" }\n")
+        with torch.no_grad():
             outputs = get_preds_multi_encoders(model, inputs, device)
-            '''
-            inputs = inputs.to(device)
-            outputs = model(inputs)
-            '''
-            if isinstance(outputs, tuple):
-                preds = torch.argmax(outputs[0], dim=1).cpu()
-            else:
-                preds = torch.argmax(outputs, dim=1).cpu()
+        '''
+        inputs = inputs.to(device)
+        outputs = model(inputs)
+        '''
+        if isinstance(outputs, tuple):
+            preds = torch.argmax(outputs[0], dim=1).cpu()
+        else:
+            preds = torch.argmax(outputs, dim=1).cpu()
 
-            targets = targets.cpu()
-            all_preds.append(preds)
-            all_targets.append(targets)
+        targets = targets.cpu()
+        all_preds.append(preds)
+        all_targets.append(targets)
 
-            if save_inference:
-                save_inference_images(i, save_inference_dir, results, inputs, outputs, preds, targets, 
-                                      batch_size, test_df, save_logits, num_classes)
+        if save_inference:
+            save_inference_images(i, save_inference_dir, results, inputs, outputs, preds, targets, 
+                                    batch_size, test_df, save_logits, num_classes)
 
     if save_inference:
         # Save DataFrame to CSV
