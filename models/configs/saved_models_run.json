@@ -23,6 +23,8 @@
             "dataset_folder": "/path/to/training_file_lists/",
             "dataset_dir":"/path/to/image_samples/",
             "batch_size": 64,
+            "bg_img_size" : 100, 
+            "test_img_size": 3,
 
             "dataset": "split_main_landsat.csv",
             "model_file": "/path/to/model_files/file",
