@@ -68,7 +68,7 @@ def plot_pie_and_bar(feature_names, band_importance_mag, band_importance_signed)
 def plot_waterfall(explanation, feature_names):
     shap.plots.waterfall(explanation, max_display=len(feature_names), show=True)
 
-def evaluate_on_shap_deep_explainer(params_dict, output_format=None):
+def evaluate_on_shap_explainer(params_dict, output_format=None, explainer_type="deep"):
     model, _, test_loader = init_model_and_loaders(params_dict)
 
     model.eval()
@@ -105,10 +105,23 @@ def evaluate_on_shap_deep_explainer(params_dict, output_format=None):
             return out.mean(dim=(1,2,3)).unsqueeze(1)
 
     wrapped_model = ModelWrapper(model)
-    e = shap.DeepExplainer(wrapped_model, background)
 
-    shap_values = e.shap_values(test_images, check_additivity=True) # shap explainations != sum of model output | TODO: check_additivity error
-    shap_arr = shap_values
+    device = params_dict.get("device", "cpu")
+    wrapped_model.to(device)
+    background = background.to(device)
+    test_images = test_images.to(device)
+
+    if explainer_type == "gradient":
+        e = shap.GradientExplainer(wrapped_model, background)
+        shap_values = e.shap_values(test_images, check_additivity=False)
+    else:
+        e = shap.DeepExplainer(wrapped_model, background)
+        shap_values = e.shap_values(test_images, check_additivity=True)
+
+    if isinstance(shap_values, list):
+        shap_values = shap_values[0]
+
+    shap_arr = shap_values.detach().cpu().numpy() if torch.is_tensor(shap_values) else shap_values
 
     if shap_arr.ndim == 5:
         shap_arr = shap_arr[..., 0]
@@ -167,6 +180,14 @@ def main():
         help="Format for DeepSHAP explainer function output visualization"
     )
 
+    parser.add_argument(
+        "--explainer","-m",
+        type=str,
+        choices=["deep", "gradient"],
+        default="deep",
+        help="SHAP explainer type"
+    )
+
     args = parser.parse_args()
     test_set = args.explain
    
@@ -188,7 +209,7 @@ def main():
     print("Starting Test. Model Parameters:")
     print(paramsdict)
 
-    evaluate_on_shap_deep_explainer(paramsdict, args.format)
+    evaluate_on_shap_explainer(paramsdict, args.format, args.explainer)
 
 if __name__ == "__main__":
     main()
