@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import numpy as np
 import torch
-from common_metrics import validate_all, record_validation_metrics_to_csv
+from evaluation.validate import validate_all, record_validation_metrics_to_csv
 import sys
 parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 script_dir = os.path.dirname(os.path.abspath(__file__))
