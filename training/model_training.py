@@ -14,13 +14,13 @@ from tqdm import tqdm
 import gc
 from evaluation.validate import validate_all, record_validation_metrics_to_csv
 from training.loss import getLossFunction
-from models.models_tcloud import save_model_and_log_params, dict_to_hash_key,init_model_and_loaders
+from model_builder.models_tcloud import save_model_and_log_params, dict_to_hash_key,init_model_and_loaders
 import torch.nn.functional as F
 import pandas as pd
 import segmentation_models_pytorch as smp
 from libraries.utils import save_geotiff, write_dict_to_json
 import json
-from models.model_test import evaluate_on_test_set
+from evaluation.model_test import evaluate_on_test_set
 from libraries.wandb_retrieve import wandinit
 from libraries.utils import get_preds_multi_encoders, set_seed
 import random

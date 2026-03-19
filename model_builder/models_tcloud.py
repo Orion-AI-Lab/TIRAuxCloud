@@ -5,12 +5,12 @@ import hashlib
 import json
 import torch.nn as nn
 import segmentation_models_pytorch as smp
-import data.loaders
-from bamcd.model import BAM_CD
-from cloudseg.models.components.hrcloudnet import HRCloudNet
-from cloudseg.models.components.cdnetv2 import CDnetV2
+from data.loaders import get_loaders
+from models.bamcd.model import BAM_CD
+from models.cloudseg.models.components.hrcloudnet import HRCloudNet
+from models.cloudseg.models.components.cdnetv2 import CDnetV2
 import segmentation_models_pytorch as smp
-from swincloud.swincloud import SwinCloud
+from models.swincloud.swincloud import SwinCloud
 
 def find_file_recursive(filename, search_dir):
     """
@@ -130,7 +130,7 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
     elif model_type in two_enc_models:
         featset, clear_bands = get_features_two_enc(featset)
 
-    train_loader, val_loader = loaders.get_loaders(input_files, None, featset, target_band, yshift=yshift, 
+    train_loader, val_loader = get_loaders(input_files, None, featset, target_band, yshift=yshift, 
                                                    clear_bands=clear_bands, batch_size=batch_size, thincloudcl=thincloudcl, 
                                                    transformkey=transformkey, model_type=model_type, testrun=test,
                                                    dataset_dir=dataset_dir, workers=workers)

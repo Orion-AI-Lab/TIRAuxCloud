@@ -10,7 +10,7 @@ parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(parent_script_dir)
 import gc
-from models_tcloud import init_model_and_loaders
+from model_builder.models_tcloud import init_model_and_loaders
 from libraries.utils import save_geotiff, get_preds_multi_encoders
 from libraries.wandb_retrieve import get_filtered_wandb_runs, wandinit
 import json
