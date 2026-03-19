@@ -5,7 +5,7 @@ import hashlib
 import json
 import torch.nn as nn
 import segmentation_models_pytorch as smp
-import loaders
+import data.loaders
 from bamcd.model import BAM_CD
 from cloudseg.models.components.hrcloudnet import HRCloudNet
 from cloudseg.models.components.cdnetv2 import CDnetV2
