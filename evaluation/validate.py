@@ -3,7 +3,7 @@ from tqdm import tqdm
 import os
 import pandas as pd
 from training.loss import getLossFunction
-from metrics import calculate_metrics
+from evaluation.metrics import calculate_metrics
 
 def validate_all(model, val_loader, params_dict):
     """
