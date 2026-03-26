@@ -10,8 +10,8 @@ class UnetModel(BaseModel) :
             classes=num_classes
         )
 
-    def forward(self,x) : 
-        return self._model(x) 
+    def forward(self,inputs) : 
+        return self._model(inputs) 
     
     @property
     def name(self) -> str : 
@@ -23,3 +23,29 @@ class UnetModel(BaseModel) :
             in_channels = len(config["features"]) ,
             num_classes = config["num_classes"]
         )
+
+class SegFormerModel(BaseModel) :
+    def __init__(self,in_channels,num_classes) : 
+        super.__init__()
+        self._model = smp.create_model(
+            arch="segformer" ,
+            encoder_name="mit_b2",
+            encoder_weights="imagenet", # pretrained on ImageNet
+            in_channels=in_channels,
+            classes=num_classes
+        )
+    
+    def forward(self, inputs):
+        return self._model(inputs)
+    
+    @property
+    def name(self) : 
+        return "SegFormer"
+    
+    @classmethod
+    def from_config(cls, config) : 
+        return cls(
+            in_channels = len(config["features"]),
+            num_classes = config["num_classes"]
+        )
+    

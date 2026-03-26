@@ -10,7 +10,7 @@ from models.bamcd.model import BAM_CD
 from models.cloudseg.models.components.hrcloudnet import HRCloudNet
 from models.cloudseg.models.components.cdnetv2 import CDnetV2
 import segmentation_models_pytorch as smp
-from models.smp_models import UnetModel
+from models.smp_models import UnetModel, SegFormerModel
 from models.swincloud.swincloud import SwinCloud
 
 def find_file_recursive(filename, search_dir):
@@ -141,15 +141,6 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
         return None, train_loader, val_loader
     if model_type in MODEL_REGISTRY : 
             initmodel = MODEL_REGISTRY[model_type].from_config(params_dict).to(device)   
-    elif model_type=="SegFormer":
-        initmodel = smp.create_model(
-        arch="segformer",
-        encoder_name="mit_b2",    
-        encoder_weights="imagenet",  # pretrained on ImageNet
-        #encoder_weights=None,
-        in_channels=len(featset),
-        classes=num_classes
-        ).to(device)
     elif model_type=="DeepLabV3":
         initmodel = smp.create_model(
         arch="deeplabv3plus",
@@ -327,5 +318,6 @@ MODEL_REGISTRY = {
     "SwinCloud" : SwinCloud,
     "bam-cd" : BAM_CD, 
     "Fine tuned Unet" : UnetModel,
-    "Unet" : UnetModel
+    "Unet" : UnetModel, 
+    "SegFormer" : SegFormerModel
 }
