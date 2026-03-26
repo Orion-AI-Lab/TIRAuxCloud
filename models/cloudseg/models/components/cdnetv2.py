@@ -17,6 +17,9 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from model_builder.base_model import BaseModel
+from model_builder.registry import register_model
+
 affine_par = True
 
 
@@ -526,8 +529,8 @@ class block_Conv3x3(nn.Module):
     def forward(self, x):
         return self.block(x)
 
-
-class CDnetV2(nn.Module):
+@register_model("CDnetV2")
+class CDnetV2(BaseModel, nn.Module):
     def __init__(self, in_channels=3,block=Bottleneck, layers=[3, 4, 6, 3], num_classes=21, aux=True):
         self.inplanes = 256  # change
         self.aux = aux
@@ -681,6 +684,16 @@ class CDnetV2(nn.Module):
         pred_aux = F.interpolate(pred_aux, size, mode='bilinear', align_corners=True)
         return pred, pred_aux
 
+    @property
+    def name(self):
+        return "CDnetV2"
+    
+    @classmethod
+    def from_config(cls, config):
+        return cls(
+            in_channels=len(config['features']) , 
+            num_classes=config["num_classes"] 
+        )
 
 if __name__ == '__main__':
     model = CDnetV2(num_classes=3)
