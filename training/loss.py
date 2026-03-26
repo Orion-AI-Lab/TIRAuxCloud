@@ -1,9 +1,8 @@
 import torch
-import numpy as np
 import segmentation_models_pytorch as smp
-import numpy as np
 import torch
 import torch.nn as nn
+
 
 class DiceLoss(nn.Module):
     def __init__(self, smooth=1):
@@ -59,27 +58,3 @@ class CDnetv2Loss(nn.Module):
         loss_aux = self.loss_fn(logits_aux, target)
         total_loss = loss + loss_aux
         return total_loss
-  
-def getLossFunction(lossname, class_counts=None, device=None):
-    if class_counts is not None:
-        #counts is class counts: e.g. np.array([123458639, 10561440, 80741393], dtype=np.float64), 
-        #                             np.array([11990540, 1955076, 4404464], dtype=np.float64)
-        inv_freq = 1.0 / np.array(class_counts) # Inverse frequency
-        weights = inv_freq / inv_freq.mean() # Normalize to make mean = 1 (recommended for CrossEntropyLoss)
-        class_weights = torch.tensor(weights, dtype=torch.float32) # Convert to PyTorch tensor
-    if lossname=="DiceCECombined":
-        return CombinedCrossEntropyDiceLoss(class_weights=class_weights.to(device)).to(device)
-    elif lossname=="CrossEntropy":
-        return torch.nn.CrossEntropyLoss()
-    elif lossname=="CrossEntropyWeights" and class_counts is not None and device is not None:
-        return torch.nn.CrossEntropyLoss(weight=class_weights.to(device))
-    elif lossname=="Focal":
-        return SMPFocalCombinedLoss()
-    elif lossname=="Dice":
-        return smp.losses.DiceLoss(mode='multiclass')
-    elif lossname=="CDnetV2Loss":
-        return CDnetv2Loss(torch.nn.CrossEntropyLoss())
-    else:
-        print("Wrong loss keyword or parameters")
-        raise
-

@@ -2,7 +2,7 @@ import torch
 from tqdm import tqdm
 import os
 import pandas as pd
-from training.loss import getLossFunction
+from training.loss_registry import get_loss
 from evaluation.metrics import calculate_metrics
 
 def validate_all(model, val_loader, params_dict):
@@ -18,7 +18,7 @@ def validate_all(model, val_loader, params_dict):
     device = params_dict["device"]
 
     if "loss" in params_dict:
-        criterion = getLossFunction(params_dict["loss"], params_dict.get("class_counts",None), device)
+        criterion = get_loss(params_dict["loss"], params_dict.get("class_counts",None), device)
     
     total_loss=0
     total_batches=0

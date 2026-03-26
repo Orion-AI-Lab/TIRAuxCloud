@@ -13,7 +13,7 @@ import albumentations as A
 from tqdm import tqdm
 import gc
 from evaluation.validate import validate_all, record_validation_metrics_to_csv
-from training.loss import getLossFunction
+from training.loss_registry import get_loss
 from model_builder.models_tcloud import save_model_and_log_params, dict_to_hash_key,init_model_and_loaders
 import torch.nn.functional as F
 import pandas as pd
@@ -86,7 +86,7 @@ def train_model(
     set_seed(seed)
     params_dict["seed"]=seed
 
-    loss_fn = getLossFunction(params_dict["loss"], params_dict.get("class_counts",None), device)
+    loss_fn = get_loss(params_dict["loss"], params_dict.get("class_counts",None), device)
 
     optimizer = get_optimizer(params_dict, model)
     
