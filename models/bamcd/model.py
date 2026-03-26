@@ -7,9 +7,10 @@ from . import initialization as init
 from .heads import SegmentationHead
 
 from .decoder import UnetDecoder
+from model_builder.base_model import BaseModel
 
 
-class BAM_CD(torch.nn.Module):
+class BAM_CD(BaseModel, torch.nn.Module):
     '''
     Args:
         encoder_name: Name of the classification model that will be used as an encoder (a.k.a backbone)
@@ -165,3 +166,26 @@ class BAM_CD(torch.nn.Module):
             return masks, decoder_output
         else:
             return masks
+
+    @classmethod
+    def from_config(cls, config):
+        fusion_mode=config["fusion_mode"] if "fusion_mode" in config else 'conc'
+        featset = config["features"]
+        if isinstance(featset[0], list):
+            inchannum=len(featset[0])
+        else:
+            inchannum=1
+        return cls(
+            encoder_weights=None,
+            decoder_attention_type="scse", # For adding Attention squeeze and exitation "scse"
+            in_channels=inchannum,
+            classes=config["num_classes"],
+            fusion_mode=fusion_mode, #'conc' or 'diff' concatenation or difference
+            activation=None,
+            siamese= False, #False
+            return_features= False
+        )
+    
+    @property
+    def name(self) : 
+        return "bam-cd"

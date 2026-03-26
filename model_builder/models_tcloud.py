@@ -176,20 +176,6 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
                 ).to(device)
         #    elif model_type=="Siamese" or model_type=="bam-cd":
         #if not onlyloaders:
-    elif model_type=="bam-cd":
-        fusion_mode=params_dict["fusion_mode"] if "fusion_mode" in params_dict else 'conc'
-        if isinstance(featset[0], list):
-            inchannum=len(featset[0])
-        else:
-            inchannum=1
-        initmodel = BAM_CD(encoder_weights=None,
-                decoder_attention_type="scse", # For adding Attention squeeze and exitation "scse"
-                in_channels=inchannum,
-                classes=num_classes,
-                fusion_mode=fusion_mode, #'conc' or 'diff' concatenation or difference
-                activation=None,
-                siamese= False, #False
-                return_features= False).to(device)
     else:
         print(f"Unrecognized Model Type: {model_type}")
         return None, None, None
@@ -343,5 +329,6 @@ MODEL_REGISTRY = {
     "Siamese": SiameseUNet,
     "HRCloudNet": HRCloudNet, 
     "CDnetV2" : CDnetV2,
-    "SwinCloud" : SwinCloud
+    "SwinCloud" : SwinCloud,
+    "bam-cd" : BAM_CD
 }
