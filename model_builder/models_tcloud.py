@@ -4,7 +4,6 @@ import pandas as pd
 import hashlib
 import json
 import torch.nn as nn
-import segmentation_models_pytorch as smp
 from data.loaders import get_loaders
 from model_builder.base_model import BaseModel
 from models.bamcd.model import BAM_CD
