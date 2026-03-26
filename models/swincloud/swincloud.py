@@ -7,6 +7,7 @@ from einops import rearrange, repeat
 
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import timm
+from model_builder.base_model import BaseModel
 
 class ConvBNReLU(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size=3, dilation=1, stride=1, norm_layer=nn.BatchNorm2d, bias=False):
@@ -890,7 +891,7 @@ class SwinTransformerSys(nn.Module):
         return flops
 
 
-class SwinCloud(nn.Module):
+class SwinCloud(BaseModel, nn.Module):
     def __init__(self, img_size=224, num_classes=2, in_chans=3, zero_head=False, vis=False):
         super(SwinCloud, self).__init__()
         self.num_classes = num_classes
@@ -919,6 +920,19 @@ class SwinCloud(nn.Module):
         #    x = x.repeat(1,3,1,1)
         logits = self.swin_cloud(x)
         return logits
+
+    @property
+    def name(self) : 
+        return "SwinCloud"
+    
+    @classmethod 
+    def from_config(cls, config):
+        return cls(
+            img_size=244,
+            num_classes=config["num_classes"],
+            in_chans=len(config["features"])
+        )
+
 
 #if __name__ == '__main__':
 #    model = SwinCloud()

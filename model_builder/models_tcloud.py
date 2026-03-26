@@ -190,8 +190,6 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
                 activation=None,
                 siamese= False, #False
                 return_features= False).to(device)
-    elif model_type=="SwinCloud":
-        initmodel = SwinCloud(img_size=224, num_classes=num_classes, in_chans=len(featset)).to(device)
     else:
         print(f"Unrecognized Model Type: {model_type}")
         return None, None, None
@@ -345,4 +343,5 @@ MODEL_REGISTRY = {
     "Siamese": SiameseUNet,
     "HRCloudNet": HRCloudNet, 
     "CDnetV2" : CDnetV2,
+    "SwinCloud" : SwinCloud
 }
