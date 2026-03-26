@@ -928,7 +928,7 @@ class SwinCloud(BaseModel, nn.Module):
     @classmethod 
     def from_config(cls, config):
         return cls(
-            img_size=244,
+            img_size=224,
             num_classes=config["num_classes"],
             in_chans=len(config["features"])
         )
