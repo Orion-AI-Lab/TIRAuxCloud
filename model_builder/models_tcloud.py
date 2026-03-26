@@ -6,6 +6,7 @@ import json
 import torch.nn as nn
 import segmentation_models_pytorch as smp
 from data.loaders import get_loaders
+from model_builder.base_model import BaseModel
 from models.bamcd.model import BAM_CD
 from models.cloudseg.models.components.hrcloudnet import HRCloudNet
 from models.cloudseg.models.components.cdnetv2 import CDnetV2
@@ -138,8 +139,9 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
     
     if onlyloaders:
         return None, train_loader, val_loader
-    
-    if model_type=="Unet" or model_type=="Fine tuned Unet":
+    if model_type in MODEL_REGISTRY : 
+            initmodel = MODEL_REGISTRY[model_type].from_config(params_dict).to(device) # TODO 
+    elif model_type=="Unet" or model_type=="Fine tuned Unet":
         initmodel = smp.Unet(encoder_name='resnet34', 
                             #encoder_weights=None, 
                             in_channels=len(featset), 
@@ -178,13 +180,6 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
         initmodel=CDnetV2(in_channels=len(featset),num_classes=num_classes).to(device)
         #    elif model_type=="Siamese" or model_type=="bam-cd":
         #if not onlyloaders:
-    elif model_type=="Siamese":
-        initmodel = SiameseUNet(encoder_name="resnet34",
-                            in_channels=1,  # because each input (cloudy, clear) is single-channel mask/band
-                            num_classes=num_classes,  # clear, thin cloud, cloud
-                            encoder_weights=None,
-                            activation=None  # logits output (no activation here, explained below)
-                            ).to(device)
     elif model_type=="bam-cd":
         fusion_mode=params_dict["fusion_mode"] if "fusion_mode" in params_dict else 'conc'
         if isinstance(featset[0], list):
@@ -228,7 +223,6 @@ class DecoderBlock(nn.Module):
         x = self.bn2(x)
         x = self.relu2(x)
         return x
-
 
 class UnetDecoder(nn.Module):
     def __init__(self, encoder_channels, decoder_channels, n_blocks=5, use_batchnorm=True):
@@ -274,7 +268,7 @@ class UnetDecoder(nn.Module):
         
         return x
 
-class SiameseUNet(nn.Module):
+class SiameseUNet(BaseModel, nn.Module):
     def __init__(
         self,
         encoder_name="resnet34",
@@ -336,3 +330,21 @@ class SiameseUNet(nn.Module):
         if self.activation is not None:
             return self.activation(logits)
         return logits
+    
+    @property
+    def name(self) -> str:
+        return "Siamese"
+    
+    @classmethod
+    def from_config(cls, config):    
+        return cls(
+            encoder_name="resnet34",
+            in_channels=1, 
+            num_classes=config["num_classes"],
+            encoder_weights=None, 
+            activation=None
+        )
+    
+MODEL_REGISTRY = {
+    "Siamese": SiameseUNet,
+}
