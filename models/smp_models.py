@@ -26,7 +26,7 @@ class UnetModel(BaseModel) :
 
 class SegFormerModel(BaseModel) :
     def __init__(self,in_channels,num_classes) : 
-        super.__init__()
+        super().__init__()
         self._model = smp.create_model(
             arch="segformer" ,
             encoder_name="mit_b2",
