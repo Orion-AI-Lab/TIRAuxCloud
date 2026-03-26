@@ -10,7 +10,7 @@ from models.bamcd.model import BAM_CD
 from models.cloudseg.models.components.hrcloudnet import HRCloudNet
 from models.cloudseg.models.components.cdnetv2 import CDnetV2
 import segmentation_models_pytorch as smp
-from models.smp_models import UnetModel, SegFormerModel
+from models.smp_models import UnetModel, SegFormerModel, DeepLabV3Model, SwinUnetModel
 from models.swincloud.swincloud import SwinCloud
 from models.siamese_unet import SiameseUNet
 
@@ -106,7 +106,6 @@ def get_features_two_enc(featset):
 def init_model_and_loaders(params_dict, onlyloaders=False):
     featset=params_dict["features"]
     featset=tolist(featset)
-    num_classes=params_dict["num_classes"]
     model_type=params_dict["model_type"]
     thincloudcl=params_dict.get("thin_cloud_class",1)
     transformkey=params_dict.get("transform",None)
@@ -142,27 +141,6 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
         return None, train_loader, val_loader
     if model_type in MODEL_REGISTRY : 
             initmodel = MODEL_REGISTRY[model_type].from_config(params_dict).to(device)   
-    elif model_type=="DeepLabV3":
-        initmodel = smp.create_model(
-        arch="deeplabv3plus",
-        encoder_name='resnet34', 
-        encoder_weights="imagenet",
-        in_channels=len(featset),
-        classes=num_classes
-        ).to(device)
-    elif model_type=="Swin-Unet":
-        # initmodel = smp.Unet(encoder_name='swin_t', 
-        #                     encoder_weights="imagenet", 
-        #                     in_channels=len(featset), classes=num_classes).to(device)
-        initmodel = smp.create_model(
-                arch="upernet",
-                encoder_name="tu-swinv2_cr_tiny_224",
-                encoder_weights=None,
-                in_channels=len(featset),
-                classes=num_classes
-                ).to(device)
-        #    elif model_type=="Siamese" or model_type=="bam-cd":
-        #if not onlyloaders:
     else:
         print(f"Unrecognized Model Type: {model_type}")
         return None, None, None
@@ -177,5 +155,7 @@ MODEL_REGISTRY = {
     "bam-cd" : BAM_CD, 
     "Fine tuned Unet" : UnetModel,
     "Unet" : UnetModel, 
-    "SegFormer" : SegFormerModel
+    "SegFormer" : SegFormerModel,
+    "DeepLabV3" : DeepLabV3Model,
+    "Swin-Unet" : SwinUnetModel
 }
