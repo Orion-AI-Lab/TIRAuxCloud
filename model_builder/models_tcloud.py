@@ -174,10 +174,6 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
                 in_channels=len(featset),
                 classes=num_classes
                 ).to(device)
-    elif model_type=="HRCloudNet":
-        initmodel=HRCloudNet(in_channels=len(featset),num_classes=num_classes).to(device)
-    elif model_type=="CDnetV2":
-        initmodel=CDnetV2(in_channels=len(featset),num_classes=num_classes).to(device)
         #    elif model_type=="Siamese" or model_type=="bam-cd":
         #if not onlyloaders:
     elif model_type=="bam-cd":
@@ -347,4 +343,6 @@ class SiameseUNet(BaseModel, nn.Module):
     
 MODEL_REGISTRY = {
     "Siamese": SiameseUNet,
+    "HRCloudNet": HRCloudNet, 
+    "CDnetV2" : CDnetV2,
 }

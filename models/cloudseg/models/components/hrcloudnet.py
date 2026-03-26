@@ -13,6 +13,8 @@ import torch._utils
 import torch.nn as nn
 import torch.nn.functional as F
 
+from model_builder.base_model import BaseModel
+
 BatchNorm2d = nn.BatchNorm2d
 # BN_MOMENTUM = 0.01
 relu_inplace = True
@@ -385,7 +387,7 @@ blocks_dict = {
 }
 
 
-class HRCloudNet(nn.Module):
+class HRCloudNet(BaseModel, nn.Module):
 
     def __init__(self, in_channels=3,num_classes=2, base_c=48, **kwargs):
         global ALIGN_CORNERS
@@ -651,6 +653,17 @@ class HRCloudNet(nn.Module):
         return dict_return['out']
         # return x
 
+    @property
+    def name(self) -> str:
+        return "HRCloudNet"    
+
+    @classmethod 
+    def from_config(cls, config):
+        return cls(
+            in_channels=len(config['features']) , 
+            num_classes=config["num_classes"] 
+        )
+    
     def init_weights(self, pretrained='', ):
         logger.info('=> init weights from normal distribution')
         for m in self.modules():
