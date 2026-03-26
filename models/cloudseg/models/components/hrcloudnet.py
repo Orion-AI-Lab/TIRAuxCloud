@@ -14,6 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from model_builder.base_model import BaseModel
+from model_builder.registry import register_model
 
 BatchNorm2d = nn.BatchNorm2d
 # BN_MOMENTUM = 0.01
@@ -386,7 +387,7 @@ blocks_dict = {
     'BOTTLENECK': Bottleneck
 }
 
-
+@register_model("HRCloudNet")
 class HRCloudNet(BaseModel, nn.Module):
 
     def __init__(self, in_channels=3,num_classes=2, base_c=48, **kwargs):

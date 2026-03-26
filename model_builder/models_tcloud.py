@@ -1,18 +1,9 @@
 import torch
 import os
-import pandas as pd
 import hashlib
 import json
-import torch.nn as nn
 from data.loaders import get_loaders
-from model_builder.base_model import BaseModel
-from models.bamcd.model import BAM_CD
-from models.cloudseg.models.components.hrcloudnet import HRCloudNet
-from models.cloudseg.models.components.cdnetv2 import CDnetV2
-import segmentation_models_pytorch as smp
-from models.smp_models import UnetModel, SegFormerModel, DeepLabV3Model, SwinUnetModel
-from models.swincloud.swincloud import SwinCloud
-from models.siamese_unet import SiameseUNet
+from model_builder.registry import get_model, list_models
 
 def find_file_recursive(filename, search_dir):
     """
@@ -139,23 +130,10 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
     
     if onlyloaders:
         return None, train_loader, val_loader
-    if model_type in MODEL_REGISTRY : 
-            initmodel = MODEL_REGISTRY[model_type].from_config(params_dict).to(device)   
+    if model_type in list_models() : 
+            initmodel = get_model(model_type, params_dict).to(device)   
     else:
         print(f"Unrecognized Model Type: {model_type}")
         return None, None, None
 
     return initmodel, train_loader, val_loader
-
-MODEL_REGISTRY = {
-    "Siamese": SiameseUNet,
-    "HRCloudNet": HRCloudNet, 
-    "CDnetV2" : CDnetV2,
-    "SwinCloud" : SwinCloud,
-    "bam-cd" : BAM_CD, 
-    "Fine tuned Unet" : UnetModel,
-    "Unet" : UnetModel, 
-    "SegFormer" : SegFormerModel,
-    "DeepLabV3" : DeepLabV3Model,
-    "Swin-Unet" : SwinUnetModel
-}

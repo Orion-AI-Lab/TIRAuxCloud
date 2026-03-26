@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from model_builder.base_model import BaseModel
+from model_builder.registry import register_model
 import segmentation_models_pytorch as smp
 
 class DecoderBlock(nn.Module):
@@ -68,6 +69,7 @@ class UnetDecoder(nn.Module):
         
         return x
 
+@register_model("Siamese")
 class SiameseUNet(BaseModel, nn.Module):
     def __init__(
         self,

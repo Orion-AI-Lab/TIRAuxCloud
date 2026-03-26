@@ -18,6 +18,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from model_builder.base_model import BaseModel
+from model_builder.registry import register_model
 
 affine_par = True
 
@@ -528,7 +529,7 @@ class block_Conv3x3(nn.Module):
     def forward(self, x):
         return self.block(x)
 
-
+@register_model("CDnetV2")
 class CDnetV2(BaseModel, nn.Module):
     def __init__(self, in_channels=3,block=Bottleneck, layers=[3, 4, 6, 3], num_classes=21, aux=True):
         self.inplanes = 256  # change

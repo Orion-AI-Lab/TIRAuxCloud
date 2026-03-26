@@ -8,8 +8,9 @@ from .heads import SegmentationHead
 
 from .decoder import UnetDecoder
 from model_builder.base_model import BaseModel
+from model_builder.registry import register_model 
 
-
+@register_model("bam-cd")
 class BAM_CD(BaseModel, torch.nn.Module):
     '''
     Args:

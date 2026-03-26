@@ -1,6 +1,8 @@
 from model_builder.base_model import BaseModel 
+from model_builder.registry import register_model 
 import segmentation_models_pytorch as smp
 
+@register_model("Unet")
 class UnetModel(BaseModel) : 
     def __init__(self,in_channels, num_classes):
         super().__init__()
@@ -24,6 +26,7 @@ class UnetModel(BaseModel) :
             num_classes = config["num_classes"]
         )
 
+@register_model("SegFormer")
 class SegFormerModel(BaseModel) :
     def __init__(self,in_channels,num_classes) : 
         super().__init__()
@@ -49,6 +52,7 @@ class SegFormerModel(BaseModel) :
             num_classes = config["num_classes"]
         )
     
+@register_model("DeepLabV3")
 class DeepLabV3Model(BaseModel):
     def __init__(self, in_channels, num_classes):
         super().__init__()
@@ -74,6 +78,7 @@ class DeepLabV3Model(BaseModel):
             num_classes=config["num_classes"]
         )
     
+@register_model("Swin-Unet")
 class SwinUnetModel(BaseModel):
     def __init__(self, in_channels, num_classes):
         super().__init__()
