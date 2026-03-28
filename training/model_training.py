@@ -24,6 +24,7 @@ from evaluation.model_test import evaluate_on_test_set
 from libraries.wandb_retrieve import wandinit
 from libraries.utils import get_preds_multi_encoders, set_seed
 import random
+from training.hooks import EntropyRegHook, UncertaintyHook
 
 def early_stop(model, early_stop_dict, params_dict, save_dir=None, wandbrun=None):
     
@@ -79,6 +80,7 @@ def train_model(
     params_dict,
     save_dir=False,
     wandbrun=None,
+    hooks=[]
 ):
 
     device=params_dict["device"]
@@ -120,6 +122,10 @@ def train_model(
                 loss = loss_fn(preds[0],preds[1],y)
             else:
                 loss = loss_fn(preds, y)
+            for hook in hooks : 
+                extra = hook.on_batch_end(preds,y)
+                if extra is not None : 
+                    loss = loss + extra
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -131,6 +137,10 @@ def train_model(
         metrics = validate_all(model, val_loader, params_dict)
         metrics["train_loss"]=avg_train_loss
         metrics["epochs_best"]=epoch
+        metrics["mean_uncertainty"]= 0 # TODO implement mean_uncertainty function
+
+        for hook in hooks : 
+            hook.on_epoch_end(metrics) 
 
         if first_epoch:
             early_stop_dict["best_early_stop"]=metrics[params_dict["target_metric"]]-1
@@ -222,6 +232,11 @@ def models_training(paramsrun):
 
                             sav=save_dir if paramsrun["save_model"] else paramsrun["save_model"]
                 
+                            hooks = [
+                                EntropyRegHook(lambda_reg=0.1),
+                                UncertaintyHook(),
+                            ]
+
                             train_model(
                                 model=model,
                                 train_loader=train_loader,
@@ -229,7 +244,8 @@ def models_training(paramsrun):
                                 params_dict=paramsdict,
                                 #save_dir=None,
                                 save_dir=sav,
-                                wandbrun=wandbrun
+                                wandbrun=wandbrun,
+                                hooks=hooks
                             )
                         
                             del model
