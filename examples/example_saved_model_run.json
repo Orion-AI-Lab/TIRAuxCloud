@@ -1,0 +1,10 @@
+{
+  "landsat": {
+    "dataset_dir": "./data/landsat_samples",
+    "dataset_folder": "./data/landsat_csvs",
+    "device": "cuda",
+    "cpuworkers": 4,
+    "batch_size": 8,
+    "model_path": "./models/pretrained_landsat.pth"
+  }
+}
