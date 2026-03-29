@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import numpy as np
 import torch
-from common_metrics import validate_all, record_validation_metrics_to_csv
+from common_metrics import validate_all, calculate_metrics, record_validation_metrics_to_csv
 import sys
 parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -95,6 +95,8 @@ def evaluate_on_test_set(
 
     all_preds = []
     all_targets = []
+    correct_pixels = 0
+    total_pixels = 0
     if save_inference:
         model_file=os.path.basename(model_path)
         save_inference_dir=os.path.join(os.path.dirname(model_path),"inferences",os.path.splitext(model_file)[0])
@@ -119,8 +121,11 @@ def evaluate_on_test_set(
                 preds = torch.argmax(outputs, dim=1).cpu()
 
             targets = targets.cpu()
-            all_preds.append(preds)
-            all_targets.append(targets)
+            correct_pixels += (preds == targets).sum().item()
+            total_pixels += targets.numel()
+            all_preds.extend(preds.view(-1).cpu().numpy())
+            all_targets.extend(targets.view(-1).cpu().numpy())
+            
 
             if save_inference:
                 save_inference_images(i, save_inference_dir, results, inputs, outputs, preds, targets, 
@@ -134,7 +139,7 @@ def evaluate_on_test_set(
 
         print(f"Saved inference results to {csv_path}")               
 
-    metrics = validate_all(model, test_loader, params_dict)
+    metrics = calculate_metrics(all_preds, all_targets, params_dict["num_classes"], total_pixels, correct_pixels)
 
     if wandbrun:
         wandbrun.log(metrics)
