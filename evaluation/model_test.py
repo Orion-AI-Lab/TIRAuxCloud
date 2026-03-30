@@ -9,10 +9,8 @@ import pandas as pd
 import torch
 from tqdm import tqdm
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(parent_script_dir)
+sys.path.insert(0, parent_script_dir)
 
 from evaluation.validate import validate_all, record_validation_metrics_to_csv
 from libraries.utils import save_geotiff, get_preds_multi_encoders
@@ -174,7 +172,7 @@ def main():
     if test_set is None:
         parser.error("--test_set or -t is required. Choose from: viirs, landsat, landsatMA")
    
-    configfile=os.path.join(script_dir,"configs/saved_models_run.json")
+    configfile = os.path.join(parent_script_dir, "configs/saved_models_run.json")
     with open(configfile, 'r') as file:
         configdict = json.load(file)
     if not test_set in configdict:
