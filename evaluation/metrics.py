@@ -35,7 +35,7 @@ def iou_per_class(preds, labels, num_classes=3):
         ious.append(iou)
     return ious
 
-def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct_pixels):
+def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct_pixels, mean_uncertainty=None):
     """
     Calculate validation metrics from predictions and targets.
     
@@ -101,8 +101,8 @@ def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct
 
     # metrics["confusion_matrix"] = cm.flatten().tolist()
 
-     # Print results
-    print(f"\nPixel Accuracy: {pixel_accuracy:.4f}, mIoU: {avg_iou}")
+    uncertainty_str = f", Mean Uncertainty: {mean_uncertainty:.4f}" if mean_uncertainty is not None else ""
+    print(f"\nPixel Accuracy: {pixel_accuracy:.4f}, mIoU: {avg_iou}{uncertainty_str}")
     print(f"{'Class':<6} {'IoU':>6} {'Precision':>10} {'Recall':>8} {'F1':>6}")
     for cls in range(num_classes):
         print(f"{cls:<6} {iou[cls]:>6.3f} {precision[cls]:>10.3f} {recall[cls]:>8.3f} {f1[cls]:>6.3f}")

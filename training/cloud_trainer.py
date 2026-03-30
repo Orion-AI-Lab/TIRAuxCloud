@@ -83,7 +83,6 @@ class CloudTrainer(BaseTrainer):
             metrics = validate_all(self.model, val_loader, self.params_dict)
             metrics["train_loss"] = avg_train_loss
             metrics["epochs_best"] = epoch
-            metrics["mean_uncertainty"] = 0  # TODO: implement mean_uncertainty
 
             self._epoch_end_hooks(metrics)
 

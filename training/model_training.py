@@ -143,7 +143,6 @@ def train_model(
         metrics = validate_all(model, val_loader, params_dict)
         metrics["train_loss"]=avg_train_loss
         metrics["epochs_best"]=epoch
-        metrics["mean_uncertainty"]= 0 # TODO implement mean_uncertainty function
 
         for hook in hooks : 
             hook.on_epoch_end(metrics) 

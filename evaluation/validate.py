@@ -22,11 +22,11 @@ def validate_all(model, val_loader, params_dict):
     
     total_loss=0
     total_batches=0
+    uncertainty_per_batch = []
 
     with torch.no_grad():
         for x, y in tqdm(val_loader, desc="Validating", leave=False):
             y = y.to(device)
-            # Move to device
             if isinstance(x, tuple) or isinstance(x, list):
                 cloudy, clear = x
                 cloudy, clear = cloudy.to(device), clear.to(device)
@@ -36,23 +36,27 @@ def validate_all(model, val_loader, params_dict):
                 logits = model(x)
 
             if isinstance(logits, tuple):
-                preds = logits[0].argmax(dim=1)
+                main_logits = logits[0]
+                preds = main_logits.argmax(dim=1)
                 if "loss" in params_dict:
                     loss = criterion(logits[0],logits[1],y)
             else:
-                preds = logits.argmax(dim=1)
+                main_logits = logits
+                preds = main_logits.argmax(dim=1)
                 if "loss" in params_dict:
                     loss = criterion(logits, y)
- 
+
+            probs = torch.softmax(main_logits, dim=1)
+            entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=1)
+            uncertainty_per_batch.append(entropy.mean().item())
+
             if "loss" in params_dict:
                 total_loss += loss.item()
                 total_batches += 1
-            
-            # Accumulate accuracy
+
             correct_pixels += (preds == y).sum().item()
             total_pixels += y.numel()
-            
-            # Store predictions and targets
+
             preds_np = preds.view(-1).cpu().numpy()
             y_np = y.view(-1).cpu().numpy()
             all_preds.extend(preds_np)
@@ -61,14 +65,14 @@ def validate_all(model, val_loader, params_dict):
     if "loss" in params_dict:
         avg_loss = total_loss / total_batches
 
-    # Calculate metrics
-    metrics = calculate_metrics(all_preds, all_targets, params_dict["num_classes"], total_pixels, correct_pixels)
+    mean_uncertainty = sum(uncertainty_per_batch) / len(uncertainty_per_batch)
+    metrics = calculate_metrics(all_preds, all_targets, params_dict["num_classes"], total_pixels, correct_pixels, mean_uncertainty=mean_uncertainty)
+    metrics["mean_uncertainty"] = mean_uncertainty
     if "loss" in params_dict:
         metrics["val_loss"] = avg_loss
         metrics["neg_val_loss"] = -avg_loss
         print(f"Val. Loss: {avg_loss}")
     
-    # Calculate all metrics using shared function
     return metrics
 
 def record_validation_metrics_to_csv(csv_path, metrics_dict, params_dict, wandbrun=None):
