@@ -1,5 +1,4 @@
-# training/hooks.py
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Optional
 import torch
 
@@ -22,15 +21,11 @@ class TrainingHook(ABC):
     def on_epoch_end(self, metrics: dict) -> None:
         pass
 
-
-# --- Concrete hooks (prototypes) ---
-
 class UncertaintyHook(TrainingHook):
     def on_epoch_end(self, metrics: dict) -> None:
         uncertainty = metrics.get("mean_uncertainty")
         if uncertainty is not None:
             print(f"[UncertaintyHook] Mean uncertainty: {uncertainty:.4f}")
-
 
 class EntropyRegHook(TrainingHook):
     """

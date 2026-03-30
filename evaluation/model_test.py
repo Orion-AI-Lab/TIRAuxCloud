@@ -4,9 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import torch
 import numpy as np
-import os
 import pandas as pd
-import numpy as np
 import torch
 from evaluation.validate import validate_all, record_validation_metrics_to_csv
 import sys
@@ -115,10 +113,7 @@ def evaluate_on_test_set(
         for i, (inputs, targets) in enumerate(tqdm(test_loader, desc="Inference Progress")):
 
             outputs = get_preds_multi_encoders(model, inputs, device)
-            '''
-            inputs = inputs.to(device)
-            outputs = model(inputs)
-            '''
+
             if isinstance(outputs, tuple):
                 preds = torch.argmax(outputs[0], dim=1).cpu()
             else:
@@ -143,8 +138,6 @@ def evaluate_on_test_set(
 
     if wandbrun:
         wandbrun.log(metrics)
-
-    #record_validation_metrics_to_csv(os.path.expanduser("~/shared_storage/tcloudDS/benchmarks/test_results_v2.csv"), metrics, params_dict)
 
     del model
     del test_loader

@@ -21,16 +21,16 @@ CONFIG = PipelineConfig(
 )
 
 BATCH_SIZE = 4
-H, W = 64, 64
-
-dummy_x = torch.randn(BATCH_SIZE, len(CONFIG.features), H, W)
-dummy_y = torch.randint(0, CONFIG.num_classes, (BATCH_SIZE, H, W))
-loader = DataLoader(TensorDataset(dummy_x, dummy_y), batch_size=BATCH_SIZE)
-
+H, W = 64, 64 # Small spatial dims — enough to verify shapes, fast on CPU
 
 def test_forward_backward():
     print("Building pipeline...")
+
+    dummy_x = torch.randn(BATCH_SIZE, len(CONFIG.features), H, W)
+    dummy_y = torch.randint(0, CONFIG.num_classes, (BATCH_SIZE, H, W))
+    loader = DataLoader(TensorDataset(dummy_x, dummy_y), batch_size=BATCH_SIZE)
     trainer = build_pipeline(CONFIG.to_dict())
+
     print(f"  Model:     {trainer.model.name}")
     print(f"  Optimizer: {type(trainer.optimizer).__name__}")
     print(f"  Loss:      {type(trainer.loss_fn).__name__}")

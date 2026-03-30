@@ -1,4 +1,3 @@
-# training/base_trainer.py
 from abc import ABC, abstractmethod
 from typing import List
 import torch
@@ -20,7 +19,6 @@ class BaseTrainer(ABC):
             logits, features = self.model(inputs)
             seg_loss = self.loss_fn(logits, labels)
 
-            # --- Hook integration: this is the ONLY change to the training loop ---
             extra_loss = torch.tensor(0.0, device=logits.device)
             for hook in self.hooks:
                 contrib = hook.on_batch_end(
@@ -33,7 +31,6 @@ class BaseTrainer(ABC):
                     extra_loss = extra_loss + contrib
 
             total_loss = seg_loss + extra_loss
-            # ---------------------------------------------------------------------
 
             self.optimizer.zero_grad()
             total_loss.backward()
