@@ -5,33 +5,32 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
+from configs.pipeline_config import PipelineConfig
 from pipeline.runner import build_pipeline
 
-PARAMS = {
-    "model_type":    "Unet",
-    "features":      ["tir"],
-    "num_classes":   2,
-    "device":        "cpu",
-    "loss":          "CrossEntropy",
-    "lr":            1e-3,
-    "optimizer":     "adam",
-    "patience":      5,
-    "target_metric": "iou_avg",
-    "results_csv":   None,
-    "lambda_reg":    0.1,
-}
+CONFIG = PipelineConfig(
+    model_type="Unet",
+    features=["tir"],
+    num_classes=2,
+    device="cpu",
+    loss="CrossEntropy",
+    lr=1e-3,
+    optimizer="adam",
+    patience=5,
+    lambda_reg=0.1,
+)
 
 BATCH_SIZE = 4
 H, W = 64, 64
 
-dummy_x = torch.randn(BATCH_SIZE, len(PARAMS["features"]), H, W)
-dummy_y = torch.randint(0, PARAMS["num_classes"], (BATCH_SIZE, H, W))
+dummy_x = torch.randn(BATCH_SIZE, len(CONFIG.features), H, W)
+dummy_y = torch.randint(0, CONFIG.num_classes, (BATCH_SIZE, H, W))
 loader = DataLoader(TensorDataset(dummy_x, dummy_y), batch_size=BATCH_SIZE)
 
 
 def test_forward_backward():
     print("Building pipeline...")
-    trainer = build_pipeline(PARAMS)
+    trainer = build_pipeline(CONFIG.to_dict())
     print(f"  Model:     {trainer.model.name}")
     print(f"  Optimizer: {type(trainer.optimizer).__name__}")
     print(f"  Loss:      {type(trainer.loss_fn).__name__}")
