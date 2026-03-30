@@ -25,6 +25,7 @@ from libraries.wandb_retrieve import wandinit
 from libraries.utils import get_preds_multi_encoders, set_seed
 import random
 from training.hooks import EntropyRegHook, UncertaintyHook
+from training.cloud_trainer import CloudTrainer
 
 def early_stop(model, early_stop_dict, params_dict, save_dir=None, wandbrun=None):
     
@@ -73,6 +74,8 @@ def get_optimizer(params_dict, model):
             )
     return optimizer
 
+# DEPRECATED: use CloudTrainer instead. Kept for reference only.
+# Still used by fine_tune_models.py — do not delete.
 def train_model(
     model, 
     train_loader,
@@ -80,7 +83,7 @@ def train_model(
     params_dict,
     save_dir=False,
     wandbrun=None,
-    hooks=[]
+    hooks=None,
 ):
 
     device=params_dict["device"]
@@ -100,6 +103,7 @@ def train_model(
     }
     first_epoch=True
     max_epochs = params_dict.get("max_epochs", 200)
+    hooks = hooks or [] 
     for epoch in range(max_epochs):
         model.train()
         train_losses = []
@@ -120,10 +124,12 @@ def train_model(
 
             if isinstance(preds, tuple):
                 loss = loss_fn(preds[0],preds[1],y)
+                logits = preds[0]
             else:
                 loss = loss_fn(preds, y)
+                logits = preds[0]
             for hook in hooks : 
-                extra = hook.on_batch_end(preds,y)
+                extra = hook.on_batch_end(logits,y)
                 if extra is not None : 
                     loss = loss + extra
             optimizer.zero_grad()
@@ -237,15 +243,21 @@ def models_training(paramsrun):
                                 UncertaintyHook(),
                             ]
 
-                            train_model(
+                            loss_fn = get_loss(paramsdict["loss"], paramsdict.get("class_counts", None), paramsdict["device"])
+                            optimizer = get_optimizer(paramsdict, model)
+
+                            trainer = CloudTrainer(
                                 model=model,
+                                optimizer=optimizer,
+                                loss_fn=loss_fn,
+                                params_dict=paramsdict,
+                                hooks=hooks,
+                            )
+                            trainer.train(
                                 train_loader=train_loader,
                                 val_loader=val_loader,
-                                params_dict=paramsdict,
-                                #save_dir=None,
                                 save_dir=sav,
                                 wandbrun=wandbrun,
-                                hooks=hooks
                             )
                         
                             del model
