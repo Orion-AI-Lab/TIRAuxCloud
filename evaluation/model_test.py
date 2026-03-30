@@ -34,18 +34,15 @@ def save_inference_images(ibatch, save_inference_dir, results, inputs, outputs, 
 
         mask_path = logits_path = None
 
-        # Save class mask
         class_mask = preds[j].numpy().astype(np.uint8)[np.newaxis, ...]
         mask_path = os.path.join(save_inference_dir, f"{image_id}_mask.tif")
         save_geotiff(class_mask, mask_path, ref_tif, dtype="uint8", count=1)
 
-        # Save logits
         if save_logits:
             logits = outputs[j].cpu().numpy().astype(np.float32)
             logits_path = os.path.join(save_inference_dir, f"{image_id}_logits.tif")
             save_geotiff(logits, logits_path, ref_tif, dtype="float32", count=num_classes)
 
-        # Compute per-class IoU
         pred_np = preds[j].numpy().flatten()
         target_np = targets[j].numpy().flatten()
         ious = []
@@ -71,8 +68,6 @@ def evaluate_on_test_set(
 
     save_inference=params_dict.get("save_inference", False)
     save_logits=params_dict.get("save_logits", False)
-    
-    # Load test set and data
 
     df = pd.read_csv(os.path.join(params_dict["dataset_folder"],params_dict["dataset"]))
     if params_dict["traintest"]!="test":
@@ -131,7 +126,6 @@ def evaluate_on_test_set(
                                       batch_size, test_df, save_logits, num_classes)
 
     if save_inference:
-        # Save DataFrame to CSV
         results_df = pd.DataFrame(results)
         csv_path = os.path.join(save_inference_dir, "inference_results.csv")
         results_df.to_csv(csv_path, index=False)
@@ -217,11 +211,9 @@ def main():
         paramsdict={}
         #model_path=find_file_recursive(os.path.basename(row["model_file"]), os.path.dirname(row["model_file"]))
 
-        #first pass config params from wandb
         for k in [p for p in dfmodels if p.startswith("config_")]:
             paramsdict[k[7:]]=wandb_row[k] # without config prefix
 
-        #second pass parameters from config files to override
         for k in configparams:
             paramsdict[k]=configparams[k]
         if "config_dataset" in wandb_row and "config_trained" not in wandb_row:
@@ -229,7 +221,6 @@ def main():
 
         if not "device" in paramsdict:
             paramsdict["device"]="cuda:0"
-        # force loading 'test' dataset in case not otherwise configured
         if not "traintest" in configparams:
             paramsdict["traintest"]="test"
     
