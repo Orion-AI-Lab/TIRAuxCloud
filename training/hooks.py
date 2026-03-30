@@ -23,7 +23,7 @@ class TrainingHook(ABC):
         pass
 
 
-# --- Concrete hooks (prototypes for your proposal) ---
+# --- Concrete hooks (prototypes) ---
 
 class UncertaintyHook(TrainingHook):
     def on_epoch_end(self, metrics: dict) -> None:
