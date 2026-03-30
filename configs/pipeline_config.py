@@ -68,6 +68,10 @@ class PipelineConfig:
             raise ValueError(f"batch_size must be > 0, got {self.batch_size}.")
         if not 0.0 <= self.lambda_reg <= 1.0:
             raise ValueError(f"lambda_reg must be in [0, 1], got {self.lambda_reg}.")
+        if self.traintest not in {"train", "val", "test"}:
+            raise ValueError(
+                f"traintest must be 'train', 'val', or 'test', got '{self.traintest}'"
+            )
 
     @classmethod
     def from_json(cls, path: str, key: str = None) -> PipelineConfig:
