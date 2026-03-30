@@ -81,7 +81,14 @@ def evaluate_on_test_set(
     num_classes=params_dict["num_classes"]
 
     model,_,test_loader=init_model_and_loaders(params_dict)
-    loaded_state_dict = torch.load(model_path, weights_only=True)
+    loaded_state_dict = torch.load(model_path, weights_only=True, map_location=device)
+
+    # Models saved before the BaseModel refactor have keys without the "_model." prefix.
+    model_keys = set(model.state_dict().keys())
+    ckpt_keys = set(loaded_state_dict.keys())
+    if not ckpt_keys.issubset(model_keys) and all(f"_model.{k}" in model_keys for k in ckpt_keys):
+        loaded_state_dict = {f"_model.{k}": v for k, v in loaded_state_dict.items()}
+
     model.load_state_dict(loaded_state_dict)
     model.eval()
 
