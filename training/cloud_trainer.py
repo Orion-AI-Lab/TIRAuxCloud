@@ -23,7 +23,7 @@ class CloudTrainer(BaseTrainer):
     Implements train() with early stopping, validation, and W&B logging.
     """
 
-    def __init__(self, model, optimizer, loss_fn, params_dict, hooks: List[TrainingHook] = None):
+    def __init__(self, model, optimizer, loss_fn, params_dict, hooks: list[TrainingHook] = None):
         super().__init__(model, optimizer, loss_fn, hooks)
         self.params_dict = params_dict
         self.device = params_dict["device"]

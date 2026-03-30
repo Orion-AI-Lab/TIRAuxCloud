@@ -1,5 +1,3 @@
-from typing import List, Optional
-
 from model_builder.registry import get_model
 from training.loss_registry import get_loss
 from training.hooks import TrainingHook, EntropyRegHook, UncertaintyHook
@@ -9,7 +7,7 @@ from training.model_training import get_optimizer
 
 def build_pipeline(
     params_dict: dict,
-    hooks: Optional[List[TrainingHook]] = None,
+    hooks: list[TrainingHook] | None = None,
 ) -> CloudTrainer:
     """
     Assembles model + optimizer + loss_fn + hooks into a CloudTrainer.

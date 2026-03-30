@@ -4,7 +4,7 @@ from training.hooks import TrainingHook
 
 class BaseTrainer(ABC):
 
-    def __init__(self, model, optimizer, loss_fn, hooks: List[TrainingHook] = None):
+    def __init__(self, model, optimizer, loss_fn, hooks: list[TrainingHook] = None):
         self.model = model
         self.optimizer = optimizer
         self.loss_fn = loss_fn
