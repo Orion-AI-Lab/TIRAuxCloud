@@ -101,7 +101,7 @@ def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct
 
     # metrics["confusion_matrix"] = cm.flatten().tolist()
 
-    uncertainty_str = f", Mean Uncertainty: {mean_uncertainty:.4f}" if mean_uncertainty is not None else ""
+    uncertainty_str = f", mean_uncertainty: {mean_uncertainty:.4f}" if mean_uncertainty is not None else ""
     print(f"\nPixel Accuracy: {pixel_accuracy:.4f}, mIoU: {avg_iou}{uncertainty_str}")
     print(f"{'Class':<6} {'IoU':>6} {'Precision':>10} {'Recall':>8} {'F1':>6}")
     for cls in range(num_classes):

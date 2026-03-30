@@ -22,10 +22,23 @@ class TrainingHook(ABC):
         pass
 
 class UncertaintyHook(TrainingHook):
+    def __init__(self):
+        self._batch_entropies: list = []
+
+    def on_batch_end(self, logits, labels, features=None, modalities=None):
+        with torch.no_grad():
+            probs = torch.softmax(logits, dim=1)
+            pixel_entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=1)
+            self._batch_entropies.append(pixel_entropy.mean().item())
+        return None
+
     def on_epoch_end(self, metrics: dict) -> None:
-        uncertainty = metrics.get("mean_uncertainty")
-        if uncertainty is not None:
-            print(f"[UncertaintyHook] Mean uncertainty: {uncertainty:.4f}")
+        if not self._batch_entropies:
+            return
+        mean_uncertainty = sum(self._batch_entropies) / len(self._batch_entropies)
+        print(f"[UncertaintyHook] Mean uncertainty (epoch): {mean_uncertainty:.4f}")
+        metrics["mean_uncertainty"] = mean_uncertainty
+        self._batch_entropies.clear()
 
 class EntropyRegHook(TrainingHook):
     """
