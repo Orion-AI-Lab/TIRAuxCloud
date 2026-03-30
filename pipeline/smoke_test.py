@@ -20,11 +20,12 @@ CONFIG = PipelineConfig(
     lambda_reg=0.1,
 )
 
-BATCH_SIZE = 4
-H, W = 64, 64 # Small spatial dims — enough to verify shapes, fast on CPU
 
 def test_forward_backward():
     print("Building pipeline...")
+
+    BATCH_SIZE = 4
+    H, W = 64, 64 # Small spatial dims — enough to verify shapes, fast on CPU
 
     dummy_x = torch.randn(BATCH_SIZE, len(CONFIG.features), H, W)
     dummy_y = torch.randint(0, CONFIG.num_classes, (BATCH_SIZE, H, W))

@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 from tqdm import tqdm
-from typing import List
 import random
 from libraries.utils import set_seed
 

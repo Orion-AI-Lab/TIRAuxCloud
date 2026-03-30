@@ -17,6 +17,7 @@ class PipelineConfig:
     model_type: str = "Unet"
     features: List[str] = field(default_factory=lambda: ["tir"])
     num_classes: int = 2
+    traintest: str = "train"
 
     dataset: str = ""
     dataset_folder: str = ""
@@ -116,7 +117,7 @@ class PipelineConfig:
             "target_metric":    self.target_metric,
             "device":           self.device,
             "results_csv":      self.results_csv,
-            "traintest":        "train",
+            "traintest":        self.traintest,
         }
         if self.dataset_dir is not None:
             d["dataset_dir"] = self.dataset_dir

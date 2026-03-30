@@ -1,24 +1,23 @@
-import sys
+import argparse
+import gc
+import json
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sys
 
-import torch
 import numpy as np
 import pandas as pd
 import torch
-from evaluation.validate import validate_all, record_validation_metrics_to_csv
-import sys
+from tqdm import tqdm
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(parent_script_dir)
-import gc
-from model_builder.models_tcloud import init_model_and_loaders
+
+from evaluation.validate import validate_all, record_validation_metrics_to_csv
 from libraries.utils import save_geotiff, get_preds_multi_encoders
 from libraries.wandb_retrieve import get_filtered_wandb_runs, wandinit
-import json
-import argparse
-from tqdm import tqdm
-
+from model_builder.models_tcloud import init_model_and_loaders
 
 def save_inference_images(ibatch, save_inference_dir, results, inputs, outputs, preds, targets, batch_size, test_df, save_logits, num_classes):
     if isinstance(inputs, list):
