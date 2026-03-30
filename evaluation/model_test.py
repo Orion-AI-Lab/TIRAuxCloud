@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import torch
 import numpy as np
 import os
@@ -173,6 +177,9 @@ def main():
     args = parser.parse_args()
     test_set = args.test_set
     list_only = args.list_only
+
+    if test_set is None:
+        parser.error("--test_set or -t is required. Choose from: viirs, landsat, landsatMA")
    
     configfile=os.path.join(script_dir,"configs/saved_models_run.json")
     with open(configfile, 'r') as file:
