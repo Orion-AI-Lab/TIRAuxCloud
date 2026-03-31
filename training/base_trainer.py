@@ -4,36 +4,15 @@ from training.hooks import TrainingHook
 
 class BaseTrainer(ABC):
 
-    def __init__(self, model, optimizer, loss_fn, hooks: list[TrainingHook] = None):
+    def __init__(self, model, optimizer, loss_fn, hooks: TrainingHook | None = None):
         self.model = model
         self.optimizer = optimizer
         self.loss_fn = loss_fn
         self.hooks = hooks or []
 
     def train_epoch(self, dataloader):
-        self.model.train()
-        for batch in dataloader:
-            inputs, labels = batch["inputs"], batch["labels"]
-            
-            logits, features = self.model(inputs)
-            seg_loss = self.loss_fn(logits, labels)
-
-            extra_loss = torch.tensor(0.0, device=logits.device)
-            for hook in self.hooks:
-                contrib = hook.on_batch_end(
-                    logits=logits,
-                    labels=labels,
-                    features=features,
-                    modalities=batch.get("modalities"),
-                )
-                if contrib is not None:
-                    extra_loss = extra_loss + contrib
-
-            total_loss = seg_loss + extra_loss
-
-            self.optimizer.zero_grad()
-            total_loss.backward()
-            self.optimizer.step()
+        """Run one training epoch. Must be implemented by subclasses."""
+        ...
 
     def _epoch_end_hooks(self, metrics: dict):
         for hook in self.hooks:
