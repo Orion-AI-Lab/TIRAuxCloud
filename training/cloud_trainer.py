@@ -23,7 +23,7 @@ class CloudTrainer(BaseTrainer):
     Implements train() with early stopping, validation, and W&B logging.
     """
 
-    def __init__(self, model, optimizer, loss_fn, params_dict, hooks: list[TrainingHook] = None):
+    def __init__(self, model, optimizer, loss_fn, params_dict, hooks: TrainingHook | None = None):
         super().__init__(model, optimizer, loss_fn, hooks)
         self.params_dict = params_dict
         self.device = params_dict["device"]
@@ -128,7 +128,7 @@ class CloudTrainer(BaseTrainer):
 
             if n >= early_stop_dict["patience"]:
                 print(f"Early stopping triggered after {n} epochs with no improvement.")
-                if self.params_dict["results_csv"]:
+                if self.params_dict.get("results_csv"):
                     record_validation_metrics_to_csv(
                         self.params_dict["results_csv"],
                         early_stop_dict["best_metrics"],

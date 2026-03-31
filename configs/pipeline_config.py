@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 VALID_LOSSES = {
     "CrossEntropy", "CrossEntropyWeights",
@@ -15,22 +15,22 @@ VALID_OPTIMIZERS = {"adam", "adamw"}
 class PipelineConfig:
 
     model_type: str = "Unet"
-    features: List[str] = field(default_factory=lambda: ["tir"])
+    features: list[str] = field(default_factory=lambda: ["tir"])
     num_classes: int = 2
     traintest: str = "train"
 
     dataset: str = ""
     dataset_folder: str = ""
-    dataset_dir: Optional[str] = None
+    dataset_dir: str | None = None
     target_band: str = "cloud_mask"
     batch_size: int = 64
     cpuworkers: int = 4
     thin_cloud_class: int = -1
     yshift: int = 0
-    transform: Optional[str] = None
+    transform: str | None = None
 
     loss: str = "CrossEntropy"
-    class_counts: Optional[List[int]] = None
+    class_counts: list[int] | None = None
 
     optimizer: str = "adam"
     lr: float = 1e-4
@@ -41,11 +41,11 @@ class PipelineConfig:
     patience: int = 20
     max_epochs: int = 200
     target_metric: str = "iou_avg"
-    seed: Optional[int] = None
+    seed: int | None = None
 
     device: str = "cpu"
-    results_csv: Optional[str] = None
-    model_file: Optional[str] = None
+    results_csv: str | None = None
+    model_file: str | None = None
     save_model: bool = False
 
     def __post_init__(self):
@@ -98,7 +98,7 @@ class PipelineConfig:
 
         return cls(**data)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         d = {
             "model_type":       self.model_type,
             "features":         self.features,
@@ -122,6 +122,7 @@ class PipelineConfig:
             "device":           self.device,
             "results_csv":      self.results_csv,
             "traintest":        self.traintest,
+            "save_model": self.save_model,
         }
         if self.dataset_dir is not None:
             d["dataset_dir"] = self.dataset_dir
