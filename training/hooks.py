@@ -1,5 +1,4 @@
 from abc import ABC
-from typing import Optional
 import torch
 
 class TrainingHook(ABC):
@@ -13,15 +12,21 @@ class TrainingHook(ABC):
         self,
         logits: torch.Tensor,
         labels: torch.Tensor,
-        features: Optional[dict] = None,
-        modalities: Optional[list] = None,
-    ) -> Optional[torch.Tensor]:
+        features: dict | None = None,
+        modalities: list | None = None,
+    ) -> torch.Tensor | None:
         return None
 
     def on_epoch_end(self, metrics: dict) -> None:
         pass
 
 class UncertaintyHook(TrainingHook):
+    """
+    Tracks mean single-pass entropy uncertainty during training.
+    Accumulates per-batch softmax entropy in on_batch_end() — no extra
+    forward passes. Reports epoch mean at on_epoch_end().
+    Prototype: PR #4. This hook brings the same metric into the training loop.
+    """
     def __init__(self):
         self._batch_entropies: list = []
 
