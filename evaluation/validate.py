@@ -65,7 +65,10 @@ def validate_all(model, val_loader, params_dict):
     if "loss" in params_dict:
         avg_loss = total_loss / total_batches
 
-    mean_uncertainty = sum(uncertainty_per_batch) / len(uncertainty_per_batch)
+    mean_uncertainty = (
+        sum(uncertainty_per_batch) / len(uncertainty_per_batch)
+        if uncertainty_per_batch else 0.0
+    )
     metrics = calculate_metrics(all_preds, all_targets, params_dict["num_classes"], total_pixels, correct_pixels, mean_uncertainty)
     metrics["val_mean_uncertainty"] = mean_uncertainty
     if "loss" in params_dict:
