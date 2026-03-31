@@ -10,10 +10,9 @@ def iou_score(preds, targets, num_classes=2):
         intersection = (pred_inds & target_inds).sum().item()
         union = (pred_inds | target_inds).sum().item()
         if union == 0:
-            ious.append(float('nan'))  # Ignore this class
+            ious.append(float('nan'))
         else:
             ious.append(intersection / union)
-    # Return mean IoU ignoring NaNs
     return np.nanmean(ious)
 
 def iou_per_class(preds, labels, num_classes=3):
@@ -29,7 +28,7 @@ def iou_per_class(preds, labels, num_classes=3):
         union = (pred_inds | label_inds).sum().item()
 
         if union == 0:
-            iou = float('nan')  # or 1.0 if you prefer
+            iou = float('nan')
         else:
             iou = intersection / union
         ious.append(iou)
@@ -47,20 +46,18 @@ def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct
         correct_pixels: Number of correctly predicted pixels
     
     Returns:
-        target_metric: Average IoU for early stopping
-        metrics: Dictionary of all metrics
+        metrics: Dictionary of all computed metrics (pixel_accuracy, iou per class,
+                precision, recall, f1, iou_avg, and optionally mean_uncertainty).
     """
-    # Convert to numpy arrays
+
     all_preds = np.array(all_preds)
     all_targets = np.array(all_targets)
     
-    # Store confusion matrix components for each class
     tp = np.zeros(num_classes, dtype=np.uint64)
     fp = np.zeros(num_classes, dtype=np.uint64)
     fn = np.zeros(num_classes, dtype=np.uint64)
     tn = np.zeros(num_classes, dtype=np.uint64)
     
-    # Calculate per-class metrics
     for cls in range(num_classes):
         cls_pred = (all_preds == cls)
         cls_true = (all_targets == cls)
@@ -69,18 +66,13 @@ def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct
         fn[cls] = np.logical_and(~cls_pred, cls_true).sum()
         tn[cls] = np.logical_and(~cls_pred, ~cls_true).sum()
     
-    # Compute metrics
     epsilon = 1e-7
     precision = tp / (tp + fp + epsilon)
     recall = tp / (tp + fn + epsilon)
     f1 = 2 * precision * recall / (precision + recall + epsilon)
     iou = tp / (tp + fp + fn + epsilon)
     pixel_accuracy = correct_pixels / total_pixels
-    
-    # Confusion matrix
-    # cm = confusion_matrix(all_targets, all_preds, labels=list(range(num_classes)))
-    
-    # Build metrics dictionary
+        
     metrics = {
         "pixel_accuracy": pixel_accuracy,
     }
@@ -98,8 +90,6 @@ def calculate_metrics(all_preds, all_targets, num_classes, total_pixels, correct
   
     avg_iou = avg_iou / num_classes
     metrics[f"iou_avg"]=avg_iou
-
-    # metrics["confusion_matrix"] = cm.flatten().tolist()
 
     uncertainty_str = f", mean_uncertainty: {mean_uncertainty:.4f}" if mean_uncertainty is not None else ""
     print(f"\nPixel Accuracy: {pixel_accuracy:.4f}, mIoU: {avg_iou}{uncertainty_str}")
