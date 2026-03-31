@@ -12,17 +12,20 @@ import numpy as np
 import albumentations as A
 from tqdm import tqdm
 import gc
-from common_metrics import validate_all, record_validation_metrics_to_csv, getLossFunction
-from models_tcloud import save_model_and_log_params, dict_to_hash_key,init_model_and_loaders
+from evaluation.validate import validate_all, record_validation_metrics_to_csv
+from training.loss_registry import get_loss
+from model_builder.models_tcloud import save_model_and_log_params, dict_to_hash_key,init_model_and_loaders
 import torch.nn.functional as F
 import pandas as pd
 import segmentation_models_pytorch as smp
 from libraries.utils import save_geotiff, write_dict_to_json
 import json
-from model_test import evaluate_on_test_set
+from evaluation.model_test import evaluate_on_test_set
 from libraries.wandb_retrieve import wandinit
 from libraries.utils import get_preds_multi_encoders, set_seed
 import random
+from training.hooks import EntropyRegHook, UncertaintyHook
+from training.cloud_trainer import CloudTrainer
 
 def early_stop(model, early_stop_dict, params_dict, save_dir=None, wandbrun=None):
     
@@ -71,6 +74,8 @@ def get_optimizer(params_dict, model):
             )
     return optimizer
 
+# DEPRECATED: use CloudTrainer instead. Kept for reference only.
+# Still used by fine_tune_models.py — do not delete.
 def train_model(
     model, 
     train_loader,
@@ -78,6 +83,7 @@ def train_model(
     params_dict,
     save_dir=False,
     wandbrun=None,
+    hooks=None,
 ):
 
     device=params_dict["device"]
@@ -85,7 +91,7 @@ def train_model(
     set_seed(seed)
     params_dict["seed"]=seed
 
-    loss_fn = getLossFunction(params_dict["loss"], params_dict.get("class_counts",None), device)
+    loss_fn = get_loss(params_dict["loss"], params_dict.get("class_counts",None), device)
 
     optimizer = get_optimizer(params_dict, model)
     
@@ -97,6 +103,7 @@ def train_model(
     }
     first_epoch=True
     max_epochs = params_dict.get("max_epochs", 200)
+    hooks = hooks or [] 
     for epoch in range(max_epochs):
         model.train()
         train_losses = []
@@ -117,8 +124,14 @@ def train_model(
 
             if isinstance(preds, tuple):
                 loss = loss_fn(preds[0],preds[1],y)
+                logits = preds[0]
             else:
                 loss = loss_fn(preds, y)
+                logits = preds[0]
+            for hook in hooks : 
+                extra = hook.on_batch_end(logits,y)
+                if extra is not None : 
+                    loss = loss + extra
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -130,6 +143,9 @@ def train_model(
         metrics = validate_all(model, val_loader, params_dict)
         metrics["train_loss"]=avg_train_loss
         metrics["epochs_best"]=epoch
+
+        for hook in hooks : 
+            hook.on_epoch_end(metrics) 
 
         if first_epoch:
             early_stop_dict["best_early_stop"]=metrics[params_dict["target_metric"]]-1
@@ -221,14 +237,26 @@ def models_training(paramsrun):
 
                             sav=save_dir if paramsrun["save_model"] else paramsrun["save_model"]
                 
-                            train_model(
+                            hooks = [
+                                EntropyRegHook(lambda_reg=0.1),
+                                UncertaintyHook(),
+                            ]
+
+                            loss_fn = get_loss(paramsdict["loss"], paramsdict.get("class_counts", None), paramsdict["device"])
+                            optimizer = get_optimizer(paramsdict, model)
+
+                            trainer = CloudTrainer(
                                 model=model,
+                                optimizer=optimizer,
+                                loss_fn=loss_fn,
+                                params_dict=paramsdict,
+                                hooks=hooks,
+                            )
+                            trainer.train(
                                 train_loader=train_loader,
                                 val_loader=val_loader,
-                                params_dict=paramsdict,
-                                #save_dir=None,
                                 save_dir=sav,
-                                wandbrun=wandbrun
+                                wandbrun=wandbrun,
                             )
                         
                             del model

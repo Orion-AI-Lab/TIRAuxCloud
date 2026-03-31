@@ -7,7 +7,7 @@ import wandb
 import torch
 import os
 import gc
-from models_tcloud import init_model_and_loaders, dict_to_hash_key
+from model_builder.models_tcloud import init_model_and_loaders, dict_to_hash_key
 import pandas as pd
 import segmentation_models_pytorch as smp
 import json
@@ -16,7 +16,7 @@ from libraries.wandb_retrieve import get_filtered_wandb_runs, wandinit
 from libraries.utils import set_seed
 from model_training import train_model
 import torch.nn as nn
-from model_test import evaluate_on_test_set
+from evaluation.model_test import evaluate_on_test_set
 import random
 
 def report_frozen_encoder_children(model):

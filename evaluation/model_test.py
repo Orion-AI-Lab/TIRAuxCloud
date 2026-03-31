@@ -1,22 +1,21 @@
-import torch
-import numpy as np
-import os
-import pandas as pd
-import numpy as np
-import torch
-from common_metrics import validate_all, record_validation_metrics_to_csv
-import sys
-parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(parent_script_dir)
-import gc
-from models_tcloud import init_model_and_loaders
-from libraries.utils import save_geotiff, get_preds_multi_encoders
-from libraries.wandb_retrieve import get_filtered_wandb_runs, wandinit
-import json
 import argparse
+import gc
+import json
+import os
+import sys
+
+import numpy as np
+import pandas as pd
+import torch
 from tqdm import tqdm
 
+parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, parent_script_dir)
+
+from evaluation.validate import validate_all, record_validation_metrics_to_csv
+from libraries.utils import save_geotiff, get_preds_multi_encoders
+from libraries.wandb_retrieve import get_filtered_wandb_runs, wandinit
+from model_builder.models_tcloud import init_model_and_loaders
 
 def save_inference_images(ibatch, save_inference_dir, results, inputs, outputs, preds, targets, batch_size, test_df, save_logits, num_classes):
     if isinstance(inputs, list):
@@ -30,18 +29,15 @@ def save_inference_images(ibatch, save_inference_dir, results, inputs, outputs, 
 
         mask_path = logits_path = None
 
-        # Save class mask
         class_mask = preds[j].numpy().astype(np.uint8)[np.newaxis, ...]
         mask_path = os.path.join(save_inference_dir, f"{image_id}_mask.tif")
         save_geotiff(class_mask, mask_path, ref_tif, dtype="uint8", count=1)
 
-        # Save logits
         if save_logits:
             logits = outputs[j].cpu().numpy().astype(np.float32)
             logits_path = os.path.join(save_inference_dir, f"{image_id}_logits.tif")
             save_geotiff(logits, logits_path, ref_tif, dtype="float32", count=num_classes)
 
-        # Compute per-class IoU
         pred_np = preds[j].numpy().flatten()
         target_np = targets[j].numpy().flatten()
         ious = []
@@ -67,8 +63,6 @@ def evaluate_on_test_set(
 
     save_inference=params_dict.get("save_inference", False)
     save_logits=params_dict.get("save_logits", False)
-    
-    # Load test set and data
 
     df = pd.read_csv(os.path.join(params_dict["dataset_folder"],params_dict["dataset"]))
     if params_dict["traintest"]!="test":
@@ -82,7 +76,14 @@ def evaluate_on_test_set(
     num_classes=params_dict["num_classes"]
 
     model,_,test_loader=init_model_and_loaders(params_dict)
-    loaded_state_dict = torch.load(model_path, weights_only=True)
+    loaded_state_dict = torch.load(model_path, weights_only=True, map_location=device)
+
+    # Models saved before the BaseModel refactor have keys without the "_model." prefix.
+    model_keys = set(model.state_dict().keys())
+    ckpt_keys = set(loaded_state_dict.keys())
+    if not ckpt_keys.issubset(model_keys) and all(f"_model.{k}" in model_keys for k in ckpt_keys):
+        loaded_state_dict = {f"_model.{k}": v for k, v in loaded_state_dict.items()}
+
     model.load_state_dict(loaded_state_dict)
     model.eval()
 
@@ -109,10 +110,7 @@ def evaluate_on_test_set(
         for i, (inputs, targets) in enumerate(tqdm(test_loader, desc="Inference Progress")):
 
             outputs = get_preds_multi_encoders(model, inputs, device)
-            '''
-            inputs = inputs.to(device)
-            outputs = model(inputs)
-            '''
+
             if isinstance(outputs, tuple):
                 preds = torch.argmax(outputs[0], dim=1).cpu()
             else:
@@ -127,7 +125,6 @@ def evaluate_on_test_set(
                                       batch_size, test_df, save_logits, num_classes)
 
     if save_inference:
-        # Save DataFrame to CSV
         results_df = pd.DataFrame(results)
         csv_path = os.path.join(save_inference_dir, "inference_results.csv")
         results_df.to_csv(csv_path, index=False)
@@ -138,8 +135,6 @@ def evaluate_on_test_set(
 
     if wandbrun:
         wandbrun.log(metrics)
-
-    #record_validation_metrics_to_csv(os.path.expanduser("~/shared_storage/tcloudDS/benchmarks/test_results_v2.csv"), metrics, params_dict)
 
     del model
     del test_loader
@@ -173,8 +168,11 @@ def main():
     args = parser.parse_args()
     test_set = args.test_set
     list_only = args.list_only
+
+    if test_set is None:
+        parser.error("--test_set or -t is required. Choose from: viirs, landsat, landsatMA")
    
-    configfile=os.path.join(script_dir,"configs/saved_models_run.json")
+    configfile = os.path.join(parent_script_dir, "configs/saved_models_run.json")
     with open(configfile, 'r') as file:
         configdict = json.load(file)
     if not test_set in configdict:
@@ -210,11 +208,9 @@ def main():
         paramsdict={}
         #model_path=find_file_recursive(os.path.basename(row["model_file"]), os.path.dirname(row["model_file"]))
 
-        #first pass config params from wandb
         for k in [p for p in dfmodels if p.startswith("config_")]:
             paramsdict[k[7:]]=wandb_row[k] # without config prefix
 
-        #second pass parameters from config files to override
         for k in configparams:
             paramsdict[k]=configparams[k]
         if "config_dataset" in wandb_row and "config_trained" not in wandb_row:
@@ -222,7 +218,6 @@ def main():
 
         if not "device" in paramsdict:
             paramsdict["device"]="cuda:0"
-        # force loading 'test' dataset in case not otherwise configured
         if not "traintest" in configparams:
             paramsdict["traintest"]="test"
     
