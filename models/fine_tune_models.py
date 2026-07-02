@@ -1,6 +1,7 @@
 import os
 import sys
 parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+script_dir = os.path.dirname(os.path.abspath(__file__))
 #libraries_path = os.path.join(current_script_dir, '..', 'libraries')
 sys.path.append(parent_script_dir)
 import wandb
@@ -117,17 +118,21 @@ def freeze_encoder_first_k(model, k: int):
     print(f"[freeze_encoder_first_k] Frozen first {k} encoder stages:",
           [type(m).__name__ for m in stages[:k]])
 
-#def models_fine_tune(device, models_csv, MA_input_files, freeze_encoder=None, skip_models_idx=[],wandbrec=True):
-def models_fine_tune(params_dict, numruns=1, wandb_group_train=None, wandb_group_test=None, wdbproject=None):
+def models_fine_tune(params_dict, numruns=1, wandb_group_train=None, wandb_group_test=None, wdbentity=None, wdbproject=None):
     
-    pretrained_model_path=params_dict["model_file"]
+    save_dir=params_dict.get("save_dir",False)
+    if save_dir:
+        pretrained_model_path=os.path.join(save_dir,os.path.basename(params_dict["model_file"]))
+    else:
+        pretrained_model_path=params_dict["model_file"]
+
+    params_dict["lr"]=params_dict.get("lr_ratio",1)*params_dict["lr"]
+    
     for run in range(1,numruns+1):
-        params_dict["lr"]=params_dict["lr"]*params_dict["lr_ratio"]
-
-        params_dict["traintest"]="fine-tune"
+        params_dict["fine-tune"]=True
+        params_dict["traintest"]="train"
         params_dict["run"]=run
-        save_dir=params_dict.get("save_dir",False)
-
+        
         model,train_loader,val_loader=init_model_and_loaders(params_dict)
         loaded_state_dict = torch.load(pretrained_model_path, weights_only=True)
         model.load_state_dict(loaded_state_dict)
@@ -153,38 +158,44 @@ def models_fine_tune(params_dict, numruns=1, wandb_group_train=None, wandb_group
         else:
             del params_dict["model_file"]
 
-        print(f"Fine Tune Train #: {run}")
-        print(params_dict)
+        if new_modelfile is None or not os.path.isfile(new_modelfile):
+            print(f"Fine Tune Train #: {run}")
+            print(params_dict)
 
-        if wandb_group_train:
-            wandbrun=wandinit(params_dict, wandb_group_train, project=wdbproject)
+            if wandb_group_train:
+                wandbrun=wandinit(params_dict, wandb_group_train, entity=wdbentity, project=wdbproject)
+            else:
+                wandbrun=None
+            
+            train_model(
+                model, 
+                train_loader,
+                val_loader,
+                params_dict,
+                save_dir=save_dir,
+                wandbrun=wandbrun,
+            )
+
+            if wandbrun:
+                wandbrun.finish()
+
+            del model
+            del train_loader
+            del val_loader
+            torch.cuda.empty_cache()
+            gc.collect()
         else:
-            wandbrun=None
-        
-        train_model(
-            model, 
-            train_loader,
-            val_loader,
-            params_dict,
-            save_dir=save_dir,
-            wandbrun=wandbrun,
-        )
+            print("Existing model file, skipping training and starting only inference on test data")
 
-        if wandbrun:
-            wandbrun.finish()
 
-        del model
-        del train_loader
-        del val_loader
-        torch.cuda.empty_cache()
-        gc.collect()
-
-        if new_modelfile:
+        if "model_file" in params_dict:
 
             params_dict["traintest"]="test"
             print(params_dict)
             
-            evaluate_on_test_set(params_dict, wandbgroup=wandb_group_test, project=wdbproject)
+            evaluate_on_test_set(params_dict, wandbgroup=wandb_group_test, wdbentity=wdbentity, wdbproject=wdbproject)
+        else:
+            print("No model file, skipping test inference")
 
 def main():
 
@@ -196,7 +207,7 @@ def main():
         "-t", "--test_set",
         type=str,
         default="viirs",
-        choices=["viirs", "landsatMA", "forest2"],
+        #choices=["viirs", "landsatMA", "forest2"],
         help="Test set identification (viirs, landsatMA, forest2)"
     )
 
@@ -210,13 +221,12 @@ def main():
     test_set = args.test_set
     list_only = args.list_only
 
-    configfile=os.path.join(parent_script_dir,"DSv3/configs/fine_tune_params.json")
+    configfile=os.path.join(script_dir,"configs/fine_tune_params.json")
     with open(configfile, 'r') as file:
         configdict = json.load(file)
     if not test_set in configdict:
         print(f"{test_set} : Test set parameters not found")
     configdict=configdict[test_set]
-    filtdict=configdict[f"wandb_filter"]
 
     wdbentity=configdict.get("wdbentity",None)
     wdbproject_source=configdict.get("wdbproject_source",None)
@@ -226,17 +236,27 @@ def main():
     
     configparams=configdict["config"]
 
-    dffilt=get_filtered_wandb_runs(wdbentity, wdbproject_source, filtdict)
-    if len(dffilt)==0:
-        return
+    if "wandb_filter" in configdict:
+        filtdict=configdict[f"wandb_filter"]
+        wandbgroup=configdict.get("wandb_group", None)
 
-    print(dffilt[["Name","config_model_type","Group","config_features","config_num_classes","config_dataset"]])
-    if list_only:
-        return
+        dffilt=get_filtered_wandb_runs(wdbentity, wdbproject_source, filtdict)
+    
+        if len(dffilt)==0:
+            return
+    
+        print(dffilt[["Name","config_model_type","Group","config_features","config_num_classes","config_dataset"]])
+
+        if list_only :
+            return
+    else:
+        # if wandb_filter is missing pick all parameters from config
+        dffilt = pd.DataFrame({"a_column": [0]})
+        wandbgroup=None
+
     
     for index, row in dffilt.iterrows():        
         paramsdict={}
-        #model_path=find_file_recursive(os.path.basename(row["model_file"]), os.path.dirname(row["model_file"]))
 
         #first pass config params from wandb
         for k in [p for p in dffilt if p.startswith("config_")]:
@@ -246,7 +266,13 @@ def main():
         for k in configparams:
             paramsdict[k]=configparams[k]
 
-        paramsdict["trained"]=row["config_dataset"]
+        # print("\n******************************configparams\n")
+        # print(configparams)
+        # print("\n******************************paramsdict\n")
+        # print(paramsdict)
+
+        if "config_dataset" in row and "config_trained" not in row:
+            paramsdict["trained"]=row["config_dataset"]
         runs=configparams.get("runs",1)
         if not "device" in paramsdict:
             paramsdict["device"]="cuda:0"
@@ -256,6 +282,7 @@ def main():
             numruns=runs,
             wandb_group_train=wandbgroup,
             wandb_group_test=wandbgroup_test,
+            wdbentity=wdbentity,
             wdbproject=wdbproject_target
         )
 

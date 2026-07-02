@@ -7,26 +7,15 @@ import torch.nn as nn
 import segmentation_models_pytorch as smp
 import loaders
 from bamcd.model import BAM_CD
-from cloudseg.models.components.hrcloudnet import HRCloudNet
+#from cloudseg.models.components.hrcloudnet import HRCloudNet
 from cloudseg.models.components.cdnetv2 import CDnetV2
 import segmentation_models_pytorch as smp
 from swincloud.swincloud import SwinCloud
-
-def find_file_recursive(filename, search_dir):
-    """
-    Recursively search for a file by name under a directory.
-
-    Args:
-        filename (str): Name of the file to search for.
-        search_dir (str): Directory path to start the search from.
-
-    Returns:
-        list of str: Full paths to files that match the filename.
-    """
- 
-    for root, dirs, files in os.walk(search_dir):
-        if filename in files:
-            return os.path.join(root, filename)
+from libraries.utils import safe_get
+from ssl4eo_l import SSL4EOLResNetUNet
+from prithvi_eo2 import PrithviEO2Segmentation
+from prithvi_lwir_structured_aux_fusion import PrithviLWIRStructuredAuxFusion
+from prithvi_lwir_aux_cross_attention_fusion import PrithviLWIRAuxCrossAttentionFusion
 
 def sort_lists(obj):
     """
@@ -99,13 +88,26 @@ def get_features_two_enc(featset):
         return [featset[0]], [featset[1]]
     elif isinstance(featset[0],list):
         return featset[0], featset[1]
-    
+
+def ssl4eo_init_info(params_dict, initmodel):
+    print("freeze_encoder param:", params_dict.get("freeze_encoder"), flush=True)
+    print("conv1 shape:", tuple(initmodel.encoder.conv1.weight.shape), flush=True)
+    print(
+        "encoder trainable params:",
+        sum(p.numel() for p in initmodel.encoder.parameters() if p.requires_grad),
+        flush=True,
+    )
+    print(
+    "decoder trainable params:",
+    sum(p.numel() for n, p in initmodel.named_parameters()
+    if p.requires_grad and not n.startswith("encoder.")),
+    flush=True)
 
 def init_model_and_loaders(params_dict, onlyloaders=False):
     featset=params_dict["features"]
     featset=tolist(featset)
     num_classes=params_dict["num_classes"]
-    model_type=params_dict["model_type"]
+    model_type=params_dict.get("model_type",None)
     thincloudcl=params_dict.get("thin_cloud_class",1)
     transformkey=params_dict.get("transform",None)
     batch_size=params_dict["batch_size"]
@@ -113,19 +115,21 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
     device=params_dict["device"]
     test=(params_dict["traintest"]=="test")
     target_band=params_dict["target_band"]
-    workers=params_dict.get("cpuworkers",4)
-    yshift=params_dict.get("yshift",1)
+    workers = safe_get(params_dict,"cpuworkers",4)
+    yshift= safe_get(params_dict,"yshift",1)
     dataset_dir=params_dict.get("dataset_dir",None)
+    data_source = params_dict.get("data_source", "tiff")
     
     initmodel=None
 
-    one_enc_models=["Unet","SegFormer","DeepLabV3","Swin-Unet","HRCloudNet","CDnetV2","SwinCloud"]
+    one_enc_models=["Unet","SegFormer","DeepLabV3","Swin-Unet","HRCloudNet","CDnetV2","SwinCloud",
+                    "SSL4EO", "Prithvi"] 
     one_enc_models=["Fine Tune "+bm for bm in one_enc_models]+one_enc_models
     two_enc_models=["Siamese", "bam-cd"]
     two_enc_models=["Fine Tune "+bm for bm in two_enc_models]+two_enc_models
     
     
-    if model_type in one_enc_models:
+    if model_type in one_enc_models or model_type.startswith(tuple(one_enc_models)) or model_type is None:
         clear_bands=None
     elif model_type in two_enc_models:
         featset, clear_bands = get_features_two_enc(featset)
@@ -133,7 +137,7 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
     train_loader, val_loader = loaders.get_loaders(input_files, None, featset, target_band, yshift=yshift, 
                                                    clear_bands=clear_bands, batch_size=batch_size, thincloudcl=thincloudcl, 
                                                    transformkey=transformkey, model_type=model_type, testrun=test,
-                                                   dataset_dir=dataset_dir, workers=workers)
+                                                   dataset_dir=dataset_dir, workers=workers, data_source=data_source)
 
     
     if onlyloaders:
@@ -172,8 +176,8 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
                 in_channels=len(featset),
                 classes=num_classes
                 ).to(device)
-    elif model_type=="HRCloudNet":
-        initmodel=HRCloudNet(in_channels=len(featset),num_classes=num_classes).to(device)
+    #elif model_type=="HRCloudNet":
+    #    initmodel=HRCloudNet(in_channels=len(featset),num_classes=num_classes).to(device)
     elif model_type=="CDnetV2":
         initmodel=CDnetV2(in_channels=len(featset),num_classes=num_classes).to(device)
         #    elif model_type=="Siamese" or model_type=="bam-cd":
@@ -201,9 +205,132 @@ def init_model_and_loaders(params_dict, onlyloaders=False):
                 return_features= False).to(device)
     elif model_type=="SwinCloud":
         initmodel = SwinCloud(img_size=224, num_classes=num_classes, in_chans=len(featset)).to(device)
+    elif model_type.startswith("SSL4EO-L") :
+        #if len(featset) != 1:
+        #    raise ValueError("SSL4EO-L has been integrated here for LWIR-only training; configure exactly one feature/band.")
+        backbone="resnet18"
+        if model_type[-2:]=="50": backbone="resnet50"
+        if model_type in ["SSL4EO-L" , "SSL4EO-L-50"]:
+            initmodel = SSL4EOLResNetUNet(
+                num_classes=num_classes,
+                backbone=backbone,
+                weights_name=params_dict.get("ssl4eo_weights", "LANDSAT_OLI_TIRS_TOA_MOCO"),
+                in_channels=1,
+                freeze_encoder=params_dict.get("freeze_encoder", False),
+            ).to(device)
+            ssl4eo_init_info(params_dict, initmodel)
+        else:
+            initmodel = SSL4EOLResNetUNet(
+                num_classes=num_classes,
+                backbone=backbone,
+                weights_name=params_dict.get("ssl4eo_weights","LANDSAT_OLI_TIRS_TOA_MOCO"),
+                in_channels=1,
+                freeze_encoder=params_dict.get("freeze_encoder", False),
+                input_mode="zero_pad_b10_b11_mean",
+            ).to(device)
+            ssl4eo_init_info(params_dict, initmodel)
+    elif model_type == "Prithvi-LWIR":
+            initmodel = PrithviEO2Segmentation(
+            num_classes=num_classes,
+            backbone=params_dict.get("prithvi_backbone", "prithvi_eo_v2_300_tl"),
+            input_mode="adapt_patch_embed_avg",
+            in_channels=len(featset),
+            freeze_encoder=params_dict.get("freeze_encoder", False),
+            decoder=params_dict.get("prithvi_decoder", "UperNetDecoder"),
+            decoder_channels=params_dict.get("prithvi_decoder_channels", 256),
+            img_size=params_dict.get("prithvi_img_size", 224),
+        ).to(device)
+    elif model_type == "Prithvi-LWIR-Z":
+            initmodel = PrithviEO2Segmentation(
+            num_classes=num_classes,
+            backbone=params_dict.get("prithvi_backbone", "prithvi_eo_v2_300_tl"),
+            input_mode="swir_lwir_zeros",
+            in_channels=1,
+            freeze_encoder=params_dict.get("freeze_encoder", False),
+            decoder=params_dict.get("prithvi_decoder", "UperNetDecoder"),
+            decoder_channels=params_dict.get("prithvi_decoder_channels", 256),
+            img_size=params_dict.get("prithvi_img_size", 224),
+        ).to(device)
+    elif model_type == "Prithvi":
+        if len(featset) != 6:
+            raise ValueError(
+                "Prithvi-HLS6 expects exactly 6 features in this order: "
+                "Landsat B2, B3, B4, B5, B6, B7."
+            )
+        initmodel = PrithviEO2Segmentation(
+            num_classes=num_classes,
+            backbone=params_dict.get("prithvi_backbone", "prithvi_eo_v2_300_tl"),
+            input_mode="native_hls6",
+            in_channels=6,
+            freeze_encoder=params_dict.get("freeze_encoder", False),
+            decoder=params_dict.get("prithvi_decoder", "UperNetDecoder"),
+            decoder_channels=params_dict.get("prithvi_decoder_channels", 256),
+            img_size=params_dict.get("prithvi_img_size", 224),
+        ).to(device)
+    elif model_type == "Prithvi-Fusion":
+
+        if len(featset) < 2:
+            raise ValueError(
+                    "Prithvi-LWIR-StructuredAuxFusion expects at least cloudy LWIR "
+                    "and one auxiliary feature."
+                )
+
+        initmodel = PrithviLWIRStructuredAuxFusion(
+            num_classes=num_classes,
+            total_in_channels=len(featset),
+
+            thermal_idx=params_dict.get("thermal_idx", 0),
+            clear_idx=params_dict.get("clear_idx", 1),
+            dem_idx=params_dict.get("dem_idx", 2),
+            weather_indices=params_dict.get(
+                "weather_indices",
+                list(range(3, len(featset)))
+            ),
+
+            prithvi_backbone=params_dict.get("prithvi_backbone", "prithvi_eo_v2_300_tl"),
+            prithvi_feature_channels=params_dict.get("prithvi_feature_channels", 64),
+            clear_feature_channels=params_dict.get("clear_feature_channels", 32),
+            dem_feature_channels=params_dict.get("dem_feature_channels", 16),
+            weather_feature_channels=params_dict.get("weather_feature_channels", 16),
+            fusion_hidden_channels=params_dict.get("fusion_hidden_channels", None),
+
+            freeze_encoder=params_dict.get("freeze_encoder", False),
+            prithvi_decoder=params_dict.get("prithvi_decoder", "UperNetDecoder"),
+            prithvi_decoder_channels=params_dict.get("prithvi_decoder_channels", 256),
+            prithvi_img_size=params_dict.get("prithvi_img_size", 256),
+
+            branch_dropout=params_dict.get("branch_dropout", 0.0),
+            weather_hidden_channels=params_dict.get("weather_hidden_channels", 64),
+        ).to(device)
+    elif model_type == "Prithvi-Cross":
+
+        initmodel = PrithviLWIRAuxCrossAttentionFusion(
+            num_classes=num_classes,
+            total_in_channels=len(featset),
+
+            thermal_idx=params_dict.get("thermal_idx", 0),
+            clear_idx=params_dict.get("clear_idx", 1),
+            dem_idx=params_dict.get("dem_idx", 2),
+            weather_indices=params_dict.get(
+                "weather_indices",
+                list(range(3, len(featset)))
+            ),
+
+            prithvi_backbone=params_dict.get("prithvi_backbone", "prithvi_eo_v2_300_tl"),
+            prithvi_feature_channels=params_dict.get("prithvi_feature_channels", 64),
+
+            aux_embed_dim=params_dict.get("aux_embed_dim", 64),
+            aux_token_grid=params_dict.get("aux_token_grid", 4),
+            num_heads=params_dict.get("num_heads", 4),
+
+            freeze_encoder=params_dict.get("freeze_encoder", False),
+            prithvi_decoder=params_dict.get("prithvi_decoder", "UperNetDecoder"),
+            prithvi_decoder_channels=params_dict.get("prithvi_decoder_channels", 256),
+            prithvi_img_size=params_dict.get("prithvi_img_size", 256),
+        ).to(device)
     else:
-        print(f"Unrecognized Model Type: {model_type}")
-        return None, None, None
+            print(f"Unrecognized Model Type: {model_type}")
+            return None, None, None
 
     return initmodel, train_loader, val_loader
 

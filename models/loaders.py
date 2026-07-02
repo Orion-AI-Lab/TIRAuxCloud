@@ -5,13 +5,30 @@ import numpy as np
 import torch
 import rasterio
 from torch.utils.data import Dataset, DataLoader
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
+try:
+    import albumentations as A
+    from albumentations.pytorch import ToTensorV2
+except Exception as e:
+    A = None
+    print(f"[warning] albumentations unavailable, continuing without it: {e}", flush=True)
 import os
 #from torchvision import transforms # Import torchvision transforms
 import rioxarray as rxr
+import xarray as xr
 from tqdm import tqdm
 import torchvision.transforms.functional as TF
+
+ONEHOT_GROUPS = {
+    "ONEHOT_LULC_VEG": [
+        111, 112, 113, 114, 115, 116,
+        121, 122, 123, 124, 125, 126,
+        20, 30, 90, 100, 40,
+    ],
+    "ONEHOT_LULC_NONVEG": [50, 60],
+    "ONEHOT_LULC_WATER":  [80, 200],
+    "ONEHOT_LULC_SNOWICE": [70],
+}
+
 
 def check_valid_values_pytorch(tensor, valid_values=[0, 1, 2]):
     """Check if tensor contains only values from valid_values"""
@@ -27,6 +44,64 @@ def getfiles(df, patches_path=None):
     else:
         files = [os.path.expanduser(f) for f in df["file"].tolist()]
     return files
+
+def collect_onehot(nested_list, prefix="ONEHOT_"):
+    result = []
+    seen = set()
+
+    def walk(item):
+        if isinstance(item, str):
+            if item.startswith(prefix) and item not in seen:
+                seen.add(item)
+                result.append(item)
+
+        elif isinstance(item, (list, tuple)):
+            for sub in item:
+                walk(sub)
+
+    walk(nested_list)
+    return result
+
+def expand_onehot(ds: xr.DataArray,
+                band_map: dict,
+                requested_onehot: list):
+    """
+    Expand the 'lulc' band into only the requested one-hot layers.
+    Does not remove the original lulc band.
+    """
+
+    onehot_source_band = next(iter(requested_onehot)).split("_")[1]
+    if onehot_source_band not in band_map:
+        return ds, band_map
+    
+    onehot_source_idx = band_map[onehot_source_band]
+    onehot_da = ds.isel(band=onehot_source_idx)
+
+    new_bands = []
+    new_names = []
+
+    for new_name in requested_onehot:
+        codes = ONEHOT_GROUPS[new_name.upper()]
+        mask_da = onehot_da.isin(codes).astype("uint8")
+        new_bands.append(mask_da)
+        new_names.append(new_name)
+
+    if len(new_bands)>0:
+        new_da = xr.concat(new_bands, dim="band")
+
+        # append new bands
+        n_old = ds.sizes["band"]
+        ds_out = xr.concat([ds, new_da], dim="band")
+
+        # update band_map
+        new_band_map = band_map.copy()
+        for i, name in enumerate(new_names):
+            new_band_map[name] = n_old + i
+            
+        return ds_out, new_band_map
+
+    return ds, band_map
+
 
 #files may contain different descriptions
 def preload_band_maps(files):
@@ -45,6 +120,12 @@ def preload_band_maps(files):
 def loadbands(path, band_map, input_bands_lists, target_band):
     ds = rxr.open_rasterio(path)#, chunks=True)
 
+    # --- NEW PART: run expand_lulc if at least one one-hot feature is requested
+    collected_onehot = collect_onehot(input_bands_lists)
+    requested_onehot = [name for name in collected_onehot if name.upper() in ONEHOT_GROUPS]
+    if requested_onehot:
+        ds, band_map = expand_onehot(ds, band_map, requested_onehot)
+
     xlist = []
     if isinstance(input_bands_lists[0],str): 
         # the items in the list are strings and represent the input features
@@ -53,7 +134,7 @@ def loadbands(path, band_map, input_bands_lists, target_band):
         # the items in the list are lists and represent aternative feature names 
         # the first item value of the first list is "<or>" to indicate the usage of the list
         # useful for joined training of different domains
-        input_bands_l = [input_bands_lists[0][1:]]+input_bands_lists[1:]
+        input_bands_l = [input_bands_lists[0][1:]+[l for l1 in input_bands_lists[1:] for l in l1]]
     elif isinstance(input_bands_lists[0],list): 
         # the items in the list are lists and represent different endoder input lists
         input_bands_l = input_bands_lists       
@@ -85,6 +166,93 @@ def process_mask(y, yshift=1, thincloudclass=1):
         y[y == 1] = 0
         y[y == 2] = 1
     return y
+
+
+
+
+class NetCDFDataset(Dataset):
+    def __init__(
+        self,
+        df,
+        band_stats,
+        input_bands,
+        target_band,
+        yshift=0,
+        transform=None,
+        thincloudcl=2,
+        patches_path=None,
+    ):
+        # same constructor style as MultiBandTiffDataset
+        self.files = getfiles(df, patches_path)
+        self.band_stats = band_stats
+        self.input_bands = input_bands
+        self.target_band = target_band
+        self.transform = transform
+        self.thincloudclass = thincloudcl
+        self.yshift = yshift
+        self.patches_path = patches_path
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, idx):
+        patch_path = self.files[idx]
+
+        with xr.open_dataset(patch_path) as ds:
+
+            x_list = []
+            for band_name in self.input_bands:
+                if band_name not in ds.data_vars:
+                    raise KeyError(
+                        f"Input variable '{band_name}' not found in {patch_path}. "
+                        f"Available variables: {list(ds.data_vars)}"
+                    )
+
+                arr = ds[band_name].values
+                arr = np.nan_to_num(arr, nan=0.0).astype(np.float32)
+
+                if arr.ndim != 2:
+                    raise ValueError(
+                        f"Expected 2D array for '{band_name}' in {patch_path}, got shape {arr.shape}"
+                    )
+
+                x_list.append(arr)
+
+            x = np.stack(x_list, axis=0)  # (C, H, W)
+
+            if self.target_band not in ds.data_vars:
+                raise KeyError(
+                    f"Target variable '{self.target_band}' not found in {patch_path}. "
+                    f"Available variables: {list(ds.data_vars)}"
+                )
+
+            y = ds[self.target_band].values
+
+        if y.ndim != 2:
+            raise ValueError(
+                f"Expected 2D mask for '{self.target_band}' in {patch_path}, got shape {y.shape}"
+            )
+        
+        y = process_mask(y, self.yshift, self.thincloudclass)
+
+        if self.transform:
+            class_mask = (y == 1) | (y == 2)
+            class_ratio = class_mask.sum() / y.size
+
+            if 0.3 <= class_ratio <= 0.7:
+                augmented = self.transform(image=x.transpose(1, 2, 0), mask=y)
+                x = augmented["image"]
+                y = augmented["mask"]
+
+        if isinstance(x, np.ndarray):
+            x = torch.from_numpy(x)
+        if isinstance(y, np.ndarray):
+            y = torch.from_numpy(y)
+
+        if not check_valid_values_pytorch(y, valid_values=[0, 1, 2]):
+            print(f"Wrong Tensor in ncdfnew sample: {patch_path}")
+
+        return x.float(), y.long()
 
 
 class MultiBandTiffDataset(Dataset):
@@ -280,9 +448,8 @@ class CloudyClearDataset(Dataset):
         return (cloudy, clear), target
 
 
-
 def get_loaders(csv_path, band_stats, input_bands, target_band, yshift=1, clear_bands=None, batch_size=4, 
-                thincloudcl=1, transformkey=None, model_type="Unet", testrun=False, dataset_dir=None, workers=4):
+                thincloudcl=1, transformkey=None, model_type="Unet", testrun=False, dataset_dir=None, workers=4, data_source=None):
 
     df = pd.read_csv(csv_path)
 
@@ -305,16 +472,43 @@ def get_loaders(csv_path, band_stats, input_bands, target_band, yshift=1, clear_
     else:
         transform = None
 
-    basemodels=["Unet","SegFormer","DeepLabV3","HRCloudNet", "CDnetV2"]
-    allbasemodels=["Fine Tune "+bm for bm in basemodels]+basemodels
-    if model_type in allbasemodels:
-        if not testrun:
-            train_ds = MultiBandTiffDataset(train_df, band_stats, input_bands, 
+    basemodels=["Unet","SegFormer","DeepLabV3","HRCloudNet", "CDnetV2", 
+                "SSL4EO", "Prithvi"]
+    allbasemodels=["Fine Tune "+bm for bm in basemodels]+basemodels+[None]
+    drop_last_train = model_type.startswith("Prithvi")
+
+    if model_type in allbasemodels or model_type.startswith(tuple(basemodels)):
+        if data_source == "nc4":
+            if not testrun:
+                train_ds = NetCDFDataset(
+                    train_df,
+                    band_stats,
+                    input_bands,
+                    target_band=target_band,
+                    yshift=yshift,
+                    transform=transform,
+                    thincloudcl=thincloudcl,
+                    patches_path=dataset_dir
+                )
+            testval_ds = NetCDFDataset(
+                testval_df,
+                band_stats,
+                input_bands,
+                target_band=target_band,
+                yshift=yshift,
+                transform=transform,
+                thincloudcl=thincloudcl,
+                patches_path=dataset_dir
+            )
+        else:
+            if not testrun:
+                train_ds = MultiBandTiffDataset(train_df, band_stats, input_bands, 
+                                                target_band=target_band, yshift=yshift, transform=transform, 
+                                                thincloudcl=thincloudcl, patches_path=dataset_dir)
+            testval_ds = MultiBandTiffDataset(testval_df, band_stats, input_bands,  
                                             target_band=target_band, yshift=yshift, transform=transform, 
                                             thincloudcl=thincloudcl, patches_path=dataset_dir)
-        testval_ds = MultiBandTiffDataset(testval_df, band_stats, input_bands,  
-                                          target_band=target_band, yshift=yshift, transform=transform, 
-                                          thincloudcl=thincloudcl, patches_path=dataset_dir)
+            
     elif model_type in ["BEFUnet", "Swin-Unet", "SwinCloud"]:
         if not testrun:
             train_ds = Crop224loader(train_df, band_stats, input_bands, 
@@ -331,9 +525,12 @@ def get_loaders(csv_path, band_stats, input_bands, target_band, yshift=1, clear_
                             include_clear_mask=False,transform=transform,thincloudcl=thincloudcl, patches_path=dataset_dir)
 
     if not testrun:
-        DLtrain = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=workers, pin_memory=True)
+        DLtrain = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=workers, pin_memory=True,
+                             drop_last=drop_last_train)
     else:
         DLtrain = None
     DLvaltest = DataLoader(testval_ds, batch_size=batch_size, num_workers=workers, pin_memory=True)
 
     return DLtrain, DLvaltest
+
+

@@ -11,12 +11,11 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(parent_script_dir)
 import gc
 from models_tcloud import init_model_and_loaders
-from libraries.utils import save_geotiff, get_preds_multi_encoders
+from libraries.utils import save_geotiff
 from libraries.wandb_retrieve import get_filtered_wandb_runs, wandinit
 import json
 import argparse
-from tqdm import tqdm
-
+from inference_backends import ONNXRuntimeModel, TensorRTEngineModel
 
 def save_inference_images(ibatch, save_inference_dir, results, inputs, outputs, preds, targets, batch_size, test_df, save_logits, num_classes):
     if isinstance(inputs, list):
@@ -60,10 +59,20 @@ def save_inference_images(ibatch, save_inference_dir, results, inputs, outputs, 
             **{f"IoU_{c}": iou for c, iou in enumerate(ious)}
         })
 
+def infer_runtime_from_model_path(model_path):
+    suffix = os.path.splitext(model_path)[1].lower()
+
+    if suffix == ".onnx":
+        return "onnx"
+    if suffix in {".engine", ".plan", ".trt"}:
+        return "tensorrt"
+    return "torch"
+
 def evaluate_on_test_set(
     params_dict,
     wandbgroup=None,
-    project=None):
+    wdbentity=None,
+    wdbproject=None):
 
     save_inference=params_dict.get("save_inference", False)
     save_logits=params_dict.get("save_logits", False)
@@ -77,69 +86,75 @@ def evaluate_on_test_set(
     test_df = df[df["dataset"] == params_dict["traintest"]].reset_index(drop=True)
 
     batch_size=params_dict["batch_size"]
-    model_path=params_dict["model_file"]
+
+    save_dir = params_dict.get("save_dir", None)
+    if save_dir:
+        model_path=os.path.join(save_dir,os.path.basename(params_dict["model_file"]))
+    else:
+        model_path=params_dict["model_file"]
+
     device=params_dict["device"]
     num_classes=params_dict["num_classes"]
 
-    model,_,test_loader=init_model_and_loaders(params_dict)
-    loaded_state_dict = torch.load(model_path, weights_only=True)
-    model.load_state_dict(loaded_state_dict)
+    runtime = params_dict.get("runtime") or infer_runtime_from_model_path(model_path)
+    
+
+    if runtime == "torch":
+        model,_,test_loader=init_model_and_loaders(params_dict)
+        loaded_state_dict = torch.load(model_path, weights_only=True)
+        model.load_state_dict(loaded_state_dict)
+
+    elif runtime == "onnx":
+        _,_,test_loader=init_model_and_loaders(params_dict, onlyloaders=True)
+        model = ONNXRuntimeModel(model_path)
+
+    elif runtime == "tensorrt":
+        _,_,test_loader=init_model_and_loaders(params_dict, onlyloaders=True)
+        model = TensorRTEngineModel(model_path, device=device)
+
     model.eval()
 
     print("Evaluating on test set...")
 
     if wandbgroup:
-        wandbrun=wandinit(params_dict, wandbgroup, project=project)
+        wandbrun=wandinit(params_dict, wandbgroup, entity=wdbentity, project=wdbproject)
     else:
         wandbrun=None
 
-    all_preds = []
-    all_targets = []
+    results = []
     if save_inference:
         model_file=os.path.basename(model_path)
         save_inference_dir=os.path.join(os.path.dirname(model_path),"inferences",os.path.splitext(model_file)[0])
         params_file=os.path.join(os.path.dirname(model_path),"inferences",os.path.splitext(model_file)[0]+".json")
+        os.makedirs(save_inference_dir, exist_ok=True)
         with open(params_file, "w") as f:
             json.dump(params_dict, f, indent=4)
-        os.makedirs(save_inference_dir, exist_ok=True)
         print(f"Save Inference to: {save_inference_dir}")
 
-    with torch.no_grad():
-        results=[]
-        for i, (inputs, targets) in enumerate(tqdm(test_loader, desc="Inference Progress")):
+    def save_batch_callback(ibatch, inputs, outputs, preds, targets):
+        save_inference_images(
+            ibatch, save_inference_dir, results,
+            inputs, outputs, preds, targets,
+            batch_size, test_df, save_logits, num_classes,
+        )
 
-            outputs = get_preds_multi_encoders(model, inputs, device)
-            '''
-            inputs = inputs.to(device)
-            outputs = model(inputs)
-            '''
-            if isinstance(outputs, tuple):
-                preds = torch.argmax(outputs[0], dim=1).cpu()
-            else:
-                preds = torch.argmax(outputs, dim=1).cpu()
-
-            targets = targets.cpu()
-            all_preds.append(preds)
-            all_targets.append(targets)
-
-            if save_inference:
-                save_inference_images(i, save_inference_dir, results, inputs, outputs, preds, targets, 
-                                      batch_size, test_df, save_logits, num_classes)
+    metrics = validate_all(
+        model,
+        test_loader,
+        params_dict,
+        batch_callback=save_batch_callback if save_inference else None,
+    )
 
     if save_inference:
-        # Save DataFrame to CSV
-        results_df = pd.DataFrame(results)
         csv_path = os.path.join(save_inference_dir, "inference_results.csv")
-        results_df.to_csv(csv_path, index=False)
-
-        print(f"Saved inference results to {csv_path}")               
-
-    metrics = validate_all(model, test_loader, params_dict)
+        pd.DataFrame(results).to_csv(csv_path, index=False)
+        print(f"Saved inference results to {csv_path}")
 
     if wandbrun:
         wandbrun.log(metrics)
 
-    #record_validation_metrics_to_csv(os.path.expanduser("~/shared_storage/tcloudDS/benchmarks/test_results_v2.csv"), metrics, params_dict)
+    if "results_csv" in params_dict:
+        record_validation_metrics_to_csv(metrics, params_dict, wandbrun=None, csv_path=params_dict["results_csv"])
 
     del model
     del test_loader
@@ -160,8 +175,7 @@ def main():
     parser.add_argument(
         "-t", "--test_set",
         type=str,
-        choices=["viirs", "landsat", "landsatMA"],
-        help="Test set identification (viirs, landsat, landsatMA)"
+        help="Test set identification (e.g. viirs, landsat, landsatMA, forest2,)"
     )
 
     parser.add_argument(
@@ -187,28 +201,29 @@ def main():
 
     configparams=configdict["config"]
 
+    wandbgroup=configdict.get("wandb_group", None)
+
     if "wandb_filter" in configdict:
         filtdict=configdict[f"wandb_filter"]
-        wandbgroup=configdict.get("wandb_group", None)
+        
 
         dfmodels=get_filtered_wandb_runs(wdbentity, wdbproject_source, filtdict)
     
         if len(dfmodels)==0:
             return
     
-        print(dfmodels[["Name","config_model_type","Group","config_features","config_num_classes","config_dataset"]])
+        dfmodels["model_file_base"] = dfmodels["config_model_file"].astype(str).apply(os.path.basename)
+        print(dfmodels[["Name","config_model_type","Group","config_features","config_num_classes","config_dataset","model_file_base"]])
 
         if list_only :
             return
     else:
         # if wandb_filter is missing pick all parameters from config
         dfmodels = pd.DataFrame({"a_column": [0]})
-        wandbgroup=None
 
     for index, wandb_row in dfmodels.iterrows():
 
         paramsdict={}
-        #model_path=find_file_recursive(os.path.basename(row["model_file"]), os.path.dirname(row["model_file"]))
 
         #first pass config params from wandb
         for k in [p for p in dfmodels if p.startswith("config_")]:
@@ -233,7 +248,7 @@ def main():
         evaluate_on_test_set(
             paramsdict,
             wandbgroup=wandbgroup,
-            project=wdbproject_target
+            wdbproject=wdbproject_target
         )
 
 if __name__ == "__main__":

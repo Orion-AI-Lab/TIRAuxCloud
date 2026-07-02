@@ -96,3 +96,28 @@ def set_seed(seed: int):
 
     # Optional strict determinism (raises on nondet ops)
     # torch.use_deterministic_algorithms(True)
+
+def safe_get(d, key, default=None, cast=None):
+    """
+    A safe dictionary getter that treats NaN or None as missing.
+    
+    Parameters:
+        d (dict): Dictionary
+        key: Key to retrieve
+        default: Default value if missing or invalid
+        cast: Optional type/function to cast the result (e.g., int)
+    """
+    val = d.get(key, default)
+
+    # Treat missing or NaN as invalid
+    if val is None or (isinstance(val, float) and math.isnan(val)):
+        return default
+
+    # Apply optional casting (e.g. int, float, str)
+    if cast is not None:
+        try:
+            return cast(val)
+        except Exception:
+            return default
+
+    return val

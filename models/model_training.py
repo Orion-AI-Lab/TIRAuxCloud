@@ -1,6 +1,7 @@
 import os
 import sys
 parent_script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+script_dir = os.path.dirname(os.path.abspath(__file__))
 #libraries_path = os.path.join(current_script_dir, '..', 'libraries')
 sys.path.append(parent_script_dir)
 import wandb
@@ -9,7 +10,6 @@ import numpy as np
 from tqdm import tqdm
 import os
 import numpy as np
-import albumentations as A
 from tqdm import tqdm
 import gc
 from common_metrics import validate_all, record_validation_metrics_to_csv, getLossFunction
@@ -21,8 +21,9 @@ from libraries.utils import save_geotiff, write_dict_to_json
 import json
 from model_test import evaluate_on_test_set
 from libraries.wandb_retrieve import wandinit
-from libraries.utils import get_preds_multi_encoders, set_seed
+from libraries.utils import get_preds_multi_encoders, set_seed, safe_get
 import random
+import argparse
 
 def early_stop(model, early_stop_dict, params_dict, save_dir=None, wandbrun=None):
     
@@ -44,8 +45,9 @@ def early_stop(model, early_stop_dict, params_dict, save_dir=None, wandbrun=None
         if early_stop_dict["epochs_no_improve"] >= early_stop_dict["patience"]:
             epochs_no_improve=early_stop_dict["epochs_no_improve"]
             print(f"Early stopping triggered after {epochs_no_improve} epochs with no improvement.")
-            if params_dict["results_csv"]:
-                record_validation_metrics_to_csv(params_dict["results_csv"], early_stop_dict["best_metrics"], params_dict, wandbrun=wandbrun)
+            csv_path=params_dict.get("results_csv",None)
+            record_validation_metrics_to_csv(early_stop_dict["best_metrics"], params_dict, 
+                                                 wandbrun=wandbrun, csv_path=csv_path)
             return early_stop_dict, True
     return early_stop_dict, False
 
@@ -71,6 +73,49 @@ def get_optimizer(params_dict, model):
             )
     return optimizer
 
+def get_optimizer(params_dict, model):
+    if hasattr(model, "get_param_groups"):
+        encoder_lr = params_dict.get("encoder_lr", params_dict["lr"] * 0.1)
+
+        param_groups = model.get_param_groups(
+            encoder_lr=encoder_lr,
+            decoder_lr=params_dict["lr"],
+            weight_decay=params_dict.get("weight_decay", 0.0),
+        )
+
+        optimizer = torch.optim.AdamW(param_groups)
+
+        for i, group in enumerate(optimizer.param_groups):
+            print(
+                f"Optimizer group {i}: "
+                f"lr={group['lr']}, "
+                f"weight_decay={group.get('weight_decay')}, "
+                f"n_params={sum(p.numel() for p in group['params'])}",
+                flush=True,
+            )
+
+        #return torch.optim.AdamW(param_groups)
+
+    elif params_dict.get("optimizer") == "adamw":
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=params_dict["lr"],
+            weight_decay=params_dict.get("weight_decay", 0.0)
+        )
+    elif "weight_decay" in params_dict:
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=params_dict["lr"],
+            weight_decay=params_dict["weight_decay"]
+        )
+    else:
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=params_dict["lr"]
+        )
+
+    return optimizer
+
 def train_model(
     model, 
     train_loader,
@@ -81,9 +126,13 @@ def train_model(
 ):
 
     device=params_dict["device"]
-    seed = params_dict.get("seed",random.randint(0, 2**32 - 1))
+
+    seed = safe_get(params_dict, "seed", default=random.randint(0, 2**32 - 1))
     set_seed(seed)
     params_dict["seed"]=seed
+
+    if wandbrun:
+        wandbrun.config.update({"seed": seed})
 
     loss_fn = getLossFunction(params_dict["loss"], params_dict.get("class_counts",None), device)
 
@@ -96,7 +145,7 @@ def train_model(
       "patience":patience
     }
     first_epoch=True
-    max_epochs = params_dict.get("max_epochs", 200)
+    max_epochs = safe_get(params_dict,"max_epochs", 200)
     for epoch in range(max_epochs):
         model.train()
         train_losses = []
@@ -171,7 +220,7 @@ def models_training(paramsrun):
                     for run_count in range(1,runs+1):
                         paramsdict={}
                         paramsdict["run"]=run_count
-                        paramsdict["patience"]=paramsrun["patience"]
+                        paramsdict["patience"]=paramsrun.get("patience",10)
                         paramsdict["loss"]=loss_t
                         for k in class_dict:
                             paramsdict[k]=class_dict[k]
@@ -182,11 +231,14 @@ def models_training(paramsrun):
                         paramsdict["target_metric"]=paramsrun["target_metric"]
                         paramsdict["target_band"]=paramsrun["target_band"]
                         paramsdict["features"]=featset
-                        paramsdict["results_csv"]=os.path.expanduser(paramsrun["results_csv"])
                         paramsdict["dataset_folder"]=os.path.expanduser(paramsrun["dataset_folder"])
                         paramsdict["transform"]=paramsrun.get("transform")
                         paramsdict["traintest"]="train"
                         paramsdict["cpuworkers"]=paramsrun["cpuworkers"]
+                        if "data_source" in paramsrun:
+                            paramsdict["data_source"]=paramsrun.get("data_source")                        
+                        if "delta" in paramsrun:
+                            paramsdict["delta"]=paramsrun.get("delta")
                         if "yshift" in paramsrun:
                             paramsdict["yshift"]=paramsrun.get("yshift")
                         if "fusion_mode" in paramsrun:
@@ -195,7 +247,10 @@ def models_training(paramsrun):
                             paramsdict["dataset_dir"]=paramsrun["dataset_dir"]
                         if "max_epochs" in paramsrun:
                             paramsdict["max_epochs"]=paramsrun["max_epochs"]
-                        paramsdict
+                        if "results_csv" in paramsrun:
+                            paramsdict["results_csv"]=os.path.expanduser(paramsrun["results_csv"])
+                        if "freeze_encoder" in paramsrun:
+                            paramsdict["freeze_encoder"]=paramsrun["freeze_encoder"]
 
                         wdbproject = paramsrun.get("wdbproject", None)
                         wdbentity = paramsrun.get("wdbentity", None)
@@ -254,14 +309,33 @@ def models_training(paramsrun):
                             else:
                                 wandbgroup=None
                             
-                            evaluate_on_test_set(paramsdict, wandbgroup=wandbgroup, project=wdbproject)
+                            evaluate_on_test_set(paramsdict, wandbgroup=wandbgroup, wdbproject=wdbproject)
 
 
 def main():
 
-    run_json=os.path.join(parent_script_dir,"DSv3/configs/train_params_run.json")
+    parser = argparse.ArgumentParser(
+        description="Train models"
+    )
+
+    parser.add_argument(
+        "-t", "--params-set",
+        type=str,
+        default="landsat",
+        #choices=["viirs", "landsatMA", "forest2"],
+        help="Parameters set identification"
+    )
+    
+    args = parser.parse_args()
+    params_set = getattr(args, "params_set", "all")
+
+    run_json=os.path.join(script_dir,"configs/train_params_run.json")
     with open(run_json, 'r') as file:
-        paramsrun = json.load(file)
+        jsonrun = json.load(file)
+
+    paramsrun=jsonrun[params_set] 
+
+    print(f"Running Configuration : {params_set}")
 
     models_training(paramsrun)
     
