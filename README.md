@@ -24,6 +24,10 @@ Inside the hugging face repository https://huggingface.co/datasets/tirauxcloud/T
 
 ## 🔁 Reproducing Model Metrics
 
+## Environment
+
+The project includes `tiraux.yml`, which can be used to create the required Conda environment.
+
 To reproduce the evaluation results of any model:
 
 ### 1️⃣ Complete the configuration file  
