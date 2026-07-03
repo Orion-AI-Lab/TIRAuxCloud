@@ -26,7 +26,7 @@ Inside the hugging face repository https://huggingface.co/datasets/tirauxcloud/T
 
 ## Environment
 
-The project includes `tiraux.yml`, which can be used to create the required Conda environment.
+The project includes `tiraux.yml`, which can be used to create the required Conda environment, although users may also create their own environment if preferred.
 
 To reproduce the evaluation results of any model:
 
