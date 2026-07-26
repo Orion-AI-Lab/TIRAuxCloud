@@ -51,6 +51,8 @@ python model_test.py -t landsatMA
 python model_test.py -t viirs
 ```
 
+*Note: For a beginner-friendly, end-to-end evaluation script, check out the [examples/](./examples/) folder.*
+
 ---
 
 ## 📖 Citation
